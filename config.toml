@@ -1,0 +1,7 @@
+baseURL = 'https://tang-hi.github.io'
+languageCode = 'en-us'
+title = "tang-hi's Blog"
+theme = "paper"
+
+github = 'tang-hi'
+name = 'tang donghai'
