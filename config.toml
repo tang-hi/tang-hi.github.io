@@ -1,7 +1,62 @@
 baseURL = 'https://tang-hi.github.io'
+author = "tang donghai"
 languageCode = 'en-us'
+disqusShortname = 'tang-hi'
 title = "tang-hi's Blog"
 theme = "paper"
+googleAnalytics = "G-D5M6G40M25"
+[params]
+  color = 'linen'
 
-github = 'tang-hi'
-name = 'tang donghai'
+  github = 'tang-hi'
+
+  avatar = 'tangdhcs@gmail.com'
+  name = 'tang donghai'
+  bio = 'take it easy'
+# ------------------------------
+
+# needed to  render raw HTML (e.g. <sub>, <sup>, <kbd>, <mark>)
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+
+[menu]
+
+  [[menu.main]]
+    identifier = "about"
+    name = "About"
+    url = "/about/"
+    weight = 10
+
+[taxonomies]
+category = "categories"
+tag = "tags"
+series = "series"
+
+[privacy]
+
+  [privacy.vimeo]
+    disabled = false
+    simple = true
+
+  [privacy.twitter]
+    disabled = false
+    enableDNT = true
+    simple = true
+
+  [privacy.instagram]
+    disabled = false
+    simple = true
+
+  [privacy.youtube]
+    disabled = false
+    privacyEnhanced = true
+
+[services]
+
+  [services.instagram]
+    disableInlineCSS = true
+
+  [services.twitter]
+    disableInlineCSS = true
