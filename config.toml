@@ -1,4 +1,4 @@
-baseURL = 'https://tang-hi.github.io'
+baseURL = 'https://tang-hi.github.io/'
 author = "tang donghai"
 languageCode = 'en-us'
 disqusShortname = 'tang-hi'
