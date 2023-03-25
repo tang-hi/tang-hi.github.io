@@ -1,3 +1,7 @@
+---
+title: "HNSW (Hierarchical Navigable Small World)"
+date: 2023-03-25
+---
 ## HNSW(Hierarchical Navigable Small World)
 HNSW是通过图的方式来解决向量搜索问题的算法，由Y.Malkov与D.Yashunin在[论文](https://arxiv.org/pdf/1603.09320.pdf)中首次提出。
 
@@ -9,17 +13,17 @@ HNSW是通过图的方式来解决向量搜索问题的算法，由Y.Malkov与D.
 ### 1. 图的性质
 我们先直观的感受一下使用图的方式来表现向量空间。
 <div style="text-align: center">
-<img src="/resources/raw_vector.png"/>
+<img src="/pic/raw_vector.png"/>
 </div>
 
 图中的点代表向量，我们可以看到，如果两个向量的距离较近，那么在图中这两个点之间的距离也会更近。当我们想要通过图的方式来解决向量搜索时，我们会希望从任一点出发可以到达图中其他所有的点，即这个图是一张联通图。
 <div style="text-align: center">
-<img src="/resources/compare_vec.png"/>
+<img src="/pic/compare_vec.png"/>
 </div>
 
 但仅仅只是联通图，仍然无法做到快速有效的找到距离最近的K个向量。考虑如下的情况，A点与B点之间相隔较远，因此如果想要从A点到达B点需要途经许多点(代表着大量的计算)，同时我们可以看到点C与许多其他的点都有连接，因此如果我们从点C开始寻找距离查询向量最近的K个点，我们会计算大量无关的点(因为与点C相连的点，其中很多大概率是与结果无关的)。
 <div style="text-align: center">
-<img src="/resources/two_conn.png"/>
+<img src="/pic/two_conn.png"/>
 </div>
 
 综上所述，为了可以高效而准确的找到距离查询向量最近的K个向量。我们希望构建的图有以下几个性质
@@ -39,20 +43,20 @@ NSW通过有效且简单的算法构建出满足上述要求的图，下面分�
 首先，添加点A，因为当前图中没有其他任何的点，所以我们只需要添加A，而不用作任何其他的操作。后面我们继续添加点B，此时图中只有点A，点的个数小于3,因此我们可以直接将两者相连。
 
 <div style="text-align: center">
-<img src="/resources/addB.png"/>
+<img src="/pic/addB.png"/>
 </div>
 
 类似的我们向图中加入点C，点D，我们会获得以下的图
 
 
 <div style="text-align: center">
-<img src="/resources/addCD.png"/>
+<img src="/pic/addCD.png"/>
 </div>
 
 随后我们继续添加点E，此时我们会找到当前图中距离点E最近的**M**个点，即A，B，C并将其相互连接。
 
 <div style="text-align: center">
-<img src="/resources/addE.png"/>
+<img src="/pic/addE.png"/>
 </div>
 
 用相同的方式，我们继续添加点F，G，H，最终得到的图如下所示。
@@ -64,7 +68,7 @@ NSW通过有效且简单的算法构建出满足上述要求的图，下面分�
 4. 距离较近的点，有边连接。因为我们始终与距离最近的**M**条边相连，因此也满足了该要求。
 
 <div style="text-align: center">
-<img src="/resources/addFH.png"/>
+<img src="/pic/addFH.png"/>
 </div>
 
 因此，我们只需要随机添加向量，并且在随机添加的过程中，与当前最近的**M**个点相连，我们就可以构建出一幅可以高效的进行ANN查询的图。下面我们讨论搜索的过程。
@@ -82,7 +86,7 @@ NSW通过有效且简单的算法构建出满足上述要求的图，下面分�
 下图为搜索的示意图,我们可以看到因为有long range，这一高速通道的存在，我们可以快速搜索到结果。
 
 <div style="text-align: center">
-<img src="/resources/nsw-search.png"/>
+<img src="/pic/nsw-search.png"/>
 </div>
 
 ### 3.HNSW
@@ -95,7 +99,7 @@ NSW通过有效且简单的算法构建出满足上述要求的图，下面分�
 #### 1.构建
 我们首先直观的感受HNSW图。我们可以看到hnsw相比于nsw多了层级的概念。我们从图中可以看到，level0中有全部的向量，随着层数的增加，向量的数量也相应的减少。
 <div style="text-align: center">
-<img src="/resources/hnsw.png"/>
+<img src="/pic/hnsw.png"/>
 </div>
 
 HNSW并不要求我们乱序插入向量，当我们向HNSW添加新的向量时，我们首先会通过一个指数衰减的概率函数，得到这个向量所处的最大层级(如果最大层级计算出来是3,那么level3, level2,level1,level0中都含有这个向量)。
@@ -113,7 +117,7 @@ HNSW并不要求我们乱序插入向量，当我们向HNSW添加新的向量时
 
 下图为一个简单的示例，新增向量所处的最高层级为1。我们首先在level2中，寻找与其最近的点(黄色标示)，找到后，我们以这个点为起点在level1中寻找与其最近的`efCounstruction`个点，随后与其中的**M**个向量进行连接。最后当我们到达level0时，我们用上一层连接的**M**个向量作为起点寻找符合要求的**2M**个向量，并与其相连。
 <div style="text-align: center">
-<img src="/resources/new-insert.png"/>
+<img src="/pic/new-insert.png"/>
 </div>
 
 当我们在某一层中(**I** >= **C** >= 0)找到距离**V**最近的`efConstruction`向量后，我们需要从中挑选出**M**个向量用以与**V**连接。
@@ -134,7 +138,7 @@ while len(Candidate) > 0 and len(Result) < M:
 按照论文中的说法，这可以帮助我们在高度聚类的数据中，取得更好的搜索效果以及效率。
 > The heuristic enhances the diversity of a vertex’s neighborhood and leads to better search efficiency for the case of highly clustered data.
 <div style="text-align: center">
-<img src="/resources/her.png"/>
+<img src="/pic/her.png"/>
 </div>
 
 #### 2.搜索
@@ -144,7 +148,7 @@ while len(Candidate) > 0 and len(Result) < M:
 2. **I** = 0
     这一阶段，我们仍旧使用贪心的搜索策略，不同之处在于，我们会维护一个距离最近的`efSearch`个向量，并最终返回结果。
 <div style="text-align: center">
-<img src="/resources/search.png"/>
+<img src="/pic/search.png"/>
 </div>
 
 #### 3.Summary
