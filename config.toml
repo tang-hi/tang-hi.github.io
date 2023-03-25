@@ -10,7 +10,7 @@ googleAnalytics = "G-D5M6G40M25"
 
   github = 'tang-hi'
 
-  avatar = 'avatar.jpeg'
+  avatar = '/avatar.jpeg'
   name = 'tang donghai'
   bio = 'take it easy'
 # ------------------------------
