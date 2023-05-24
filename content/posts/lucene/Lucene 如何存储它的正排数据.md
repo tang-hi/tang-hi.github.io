@@ -146,5 +146,48 @@ final long infoAndBits = (((long) info.number) << TYPE_BITS) | NUMERIC_DOUBLE;
 <img src="/pic/lucene-forward/bufferedDocs.png"/>
 </div>
 
-当处理完每篇文档的字段后，我们可以认为我们已经将这篇文档buffer在了内存中，而后我们需要做的就是对正排索引进行收尾工作，即将其flush到磁盘中。
+当处理完每篇文档的字段后，我们可以认为我们已经将这篇文档buffer存在了内存中，而后我们需要做的就是对正排索引进行收尾工作，即将其flush到磁盘中。
+对文档的正排索引进行收尾工作的函数为`finishDocument`
+````java
+@Override
+public void finishDocument() throws IOException {
+    if (numBufferedDocs == this.numStoredFields.length) {
+      final int newLength = ArrayUtil.oversize(numBufferedDocs + 1, 4);
+      this.numStoredFields = ArrayUtil.growExact(this.numStoredFields, newLength);
+      endOffsets = ArrayUtil.growExact(endOffsets, newLength);
+    }
+    this.numStoredFields[numBufferedDocs] = numStoredFieldsInDoc;
+    numStoredFieldsInDoc = 0;
+    endOffsets[numBufferedDocs] = Math.toIntExact(bufferedDocs.size());
+    ++numBufferedDocs;
+    if (triggerFlush()) {
+      flush(false);
+    }
+}
+````
+在这个函数中我们会发现它一共干了四件事
+1. 将每一篇文档中需要进行存储的字段数量记录下来，保存在数组`numStoredFields`中
+2. 记录下这篇文档最后一个byte的写入位置，保存在数组`endOffsets`中
+3. 记录下目前已经在内存中存储的文档数，保存在变量`numBufferedDocs`。
+4. 判断是否需要将内存中的文档刷到磁盘中， 如果需要进行flush。
 
+<div style="text-align: center">
+<img src="/pic/lucene-forward/finishDocument1.png"/>
+</div>
+
+通过上面的图和代码，我们应该已经明白了前三件事，后续我们重点关注第四件事。
+### 刷到磁盘的时机
+
+````java
+private boolean triggerFlush() {
+    return bufferedDocs.size() >= chunkSize
+        || // chunks of at least chunkSize bytes
+        numBufferedDocs >= maxDocsPerChunk;
+  }
+
+````
+从代码中我们可以看到，当内存中缓存的Doc**数量达到阈值**或者缓存的Doc**所占用的内存达到阈值**时，都会触发落盘这一操作。
+
+### 刷新到磁盘
+
+从这里开始，我们开始真正了解，Lucene是如何将他的正排数据保存在磁盘中。
