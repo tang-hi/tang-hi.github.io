@@ -190,4 +190,291 @@ private boolean triggerFlush() {
 
 ### 刷新到磁盘
 
-从这里开始，我们开始真正了解，Lucene是如何将他的正排数据保存在磁盘中。
+从这里开始，我们开始真正了解，Lucene是如何将他的正排数据保存在磁盘中。我们假设我们内存中一共缓存了三篇文档。
+<div style="text-align: center">
+<img src="/pic/lucene-forward/flush-overview.png"/>
+</div>
+
+````java
+private void flush(boolean force) throws IOException {
+    // skip...
+    numChunks++;
+   
+    // skip...
+
+    // transform end offsets into lengths
+    final int[] lengths = endOffsets;
+    for (int i = numBufferedDocs - 1; i > 0; --i) {
+      lengths[i] = endOffsets[i] - endOffsets[i - 1];
+      assert lengths[i] >= 0;
+    }
+    final boolean sliced = bufferedDocs.size() >= 2L * chunkSize;
+    final boolean dirtyChunk = force;
+    // skip...
+}
+````
+从代码中我们可以看到在实际写到磁盘前，我们仍然需要在内存中做一些计算
+1. 递增写到磁盘的chunk数
+2. 将之前保存的每篇文档最后一byte所处的位置(endOffsets)转化为每篇文档的长度。
+3. 判断是否需要分片, sliced
+4. 判断是否为dirtyChunk
+
+后两个目前不需要了解，只需要理解前两个即可。
+我们需要向磁盘中写入的文件一共有5个
+1. fdt
+2. fdm
+3. fdx
+4. seg-xx-doc_ids
+5. seg-xx-file_pointers
+
+其中4,5为临时文件，并不会出现在最后的索引文件中，仅仅起到暂时存储数据的任务。具体内存中各变量的值，以及需要写的磁盘文件可见下图。
+
+<div style="text-align: center">
+<img src="/pic/lucene-forward/wait-to-flush.png"/>
+</div>
+
+首先我们会将该chunk所保存的文档数以及该chunk在fdt文件中的起始位置写到文件seg-xx-doc_ids,seg-xx-file_pointers中。
+````java
+
+private void flush(boolean force) throws IOException {
+    // skip...
+    indexWriter.writeIndex(numBufferedDocs, fieldsStream.getFilePointer());
+    //skip...
+}
+
+void writeIndex(int numDocs, long startPointer) throws IOException {
+    assert startPointer >= previousFP;
+    docsOut.writeVInt(numDocs);
+    filePointersOut.writeVLong(startPointer - previousFP);
+    previousFP = startPointer;
+    totalDocs += numDocs;
+    totalChunks++;
+}
+````
+我们注意到当写filePointers时，我们存的并不是实际的值而是差值，这是因为filePointers一定是连续递增的数组，对于这种情况
+存储差值可以使得实际存储的元素相较于原值更小，从而有利于压缩。想象一下，**存储100000所需要的bit数是远大于3所需要的bit数**。
+写完文件seg-xx-doc_ids,seg-xx-file_pointers后的状态可参考下图。
+
+<div style="text-align: center">
+<img src="/pic/lucene-forward/index-writer.png"/>
+</div>
+
+在写完文件seg-xx-doc_ids,seg-xx-file_pointers后，我们需要将缓存的文档内容写入文件fdt中。
+````java
+
+private void flush(boolean force) throws IOException {
+    // skip...
+    writeHeader(docBase, numBufferedDocs, numStoredFields, lengths, sliced, dirtyChunk);
+    //skip...
+    if (sliced) {
+      // big chunk, slice it, using ByteBuffersDataInput ignore memory copy
+      final int capacity = (int) bytebuffers.size();
+      for (int compressed = 0; compressed < capacity; compressed += chunkSize) {
+        int l = Math.min(chunkSize, capacity - compressed);
+        ByteBuffersDataInput bbdi = bytebuffers.slice(compressed, l);
+        compressor.compress(bbdi, fieldsStream);
+      }
+    } else {
+      compressor.compress(bytebuffers, fieldsStream);
+    }
+}
+
+private void writeHeader(
+      int docBase,
+      int numBufferedDocs,
+      int[] numStoredFields,
+      int[] lengths,
+      boolean sliced,
+      boolean dirtyChunk)
+      throws IOException {
+    final int slicedBit = sliced ? 1 : 0;
+    final int dirtyBit = dirtyChunk ? 2 : 0;
+    // save docBase and numBufferedDocs
+    fieldsStream.writeVInt(docBase);
+    fieldsStream.writeVInt((numBufferedDocs << 2) | dirtyBit | slicedBit);
+
+    // save numStoredFields
+    saveInts(numStoredFields, numBufferedDocs, fieldsStream);
+
+    // save lengths
+    saveInts(lengths, numBufferedDocs, fieldsStream);
+}
+
+````
+
+可以看到我们会向fdt中写入`docBase`,`numBufferedDocs`,`dirtyBit`,`slicedBit`,`numStoredFields`,`lengths`以及`bufferedDocs`.
+1. `docBase`为这个chunk的第一个`DocID`。
+2. `numBufferedDocs`为这个chunk总共缓存的Doc数
+3. `dirtyBit`,`slicedBit`目前可以忽略
+4. 数组`numStoredFields` 为每篇Doc需要存储的字段数量
+5. 数组`lengths`为每篇Doc的长度
+6. 数组`numBufferedDocs`为全部Doc实际存储的数据。
+
+写完fdt后的状态如下图所示
+
+<div style="text-align: center">
+<img src="/pic/lucene-forward/fdt.png"/>
+</div>
+
+函数`flush`目前全部介绍完毕，Lucene就是这样处理一篇一篇的Doc,先缓存在内存中，当缓存一定数量后再flush到磁盘中。
+
+### 生成最后的索引文件
+当Lucene处理完全部的文档后，会调用`finish`生成最后的索引文件。
+````java
+@Override
+public void finish(int numDocs) throws IOException {
+    if (numBufferedDocs > 0) {
+      flush(true);
+    } else {
+      assert bufferedDocs.size() == 0;
+    }
+    if (docBase != numDocs) {
+      throw new RuntimeException(
+          "Wrote " + docBase + " docs, finish called with numDocs=" + numDocs);
+    }
+    indexWriter.finish(numDocs, fieldsStream.getFilePointer(), metaStream);
+    metaStream.writeVLong(numChunks);
+    metaStream.writeVLong(numDirtyChunks);
+    metaStream.writeVLong(numDirtyDocs);
+    CodecUtil.writeFooter(metaStream);
+    CodecUtil.writeFooter(fieldsStream);
+    assert bufferedDocs.size() == 0;
+}
+````
+
+通过这个函数我们现在可以知道`flush`中的`dirty`是什么意思,当我们内存缓存的Doc并未达到flush的条件，但是文档已经处理完了，我们需要将其强制
+flush到磁盘中，对于这种情况，我们会将dirty设置为`true`。至于`sliced`则是因为如果`bufferedDocs`的长度很大，为了保证压缩的效果，我们会对其
+进行分片，分片压缩并写入到文件fdt中。
+
+在将缓存的Doc全部flush到磁盘后，我们开始生成文件fdx，fdm。
+我们先关注`indexWriter.finish(numDocs, fieldsStream.getFilePointer(), metaStream);`
+
+````java
+void finish(int numDocs, long maxPointer, IndexOutput metaOut) throws IOException {
+    if (numDocs != totalDocs) {
+      throw new IllegalStateException("Expected " + numDocs + " docs, but got " + totalDocs);
+    }
+    CodecUtil.writeFooter(docsOut);
+    CodecUtil.writeFooter(filePointersOut);
+    IOUtils.close(docsOut, filePointersOut);
+
+    // skip...
+}
+````
+Lucene首先会给文件seg-xx-doc_ids,seg-xx-file_pointers写上`Footer`标记写入完成。同时`Footer`也可以保护文件的完整性。
+
+<div style="text-align: center">
+<img src="/pic/lucene-forward/temp-footer.png"/>
+</div>
+
+随后我们会像fdx以及fdm中写入
+````java
+void finish(int numDocs, long maxPointer, IndexOutput metaOut) throws IOException {
+    //skip...
+
+    try (IndexOutput dataOut =
+        dir.createOutput(IndexFileNames.segmentFileName(name, suffix, extension), ioContext)) {
+      CodecUtil.writeIndexHeader(dataOut, codecName + "Idx", VERSION_CURRENT, id, suffix);
+
+      metaOut.writeInt(numDocs);
+      metaOut.writeInt(blockShift);
+      metaOut.writeInt(totalChunks + 1);
+      metaOut.writeLong(dataOut.getFilePointer());
+
+      try (ChecksumIndexInput docsIn = dir.openChecksumInput(docsOut.getName())) {
+        CodecUtil.checkHeader(docsIn, codecName + "Docs", VERSION_CURRENT, VERSION_CURRENT);
+        Throwable priorE = null;
+        try {
+          final DirectMonotonicWriter docs =
+              DirectMonotonicWriter.getInstance(metaOut, dataOut, totalChunks + 1, blockShift);
+          long doc = 0;
+          docs.add(doc);
+          for (int i = 0; i < totalChunks; ++i) {
+            doc += docsIn.readVInt();
+            docs.add(doc);
+          }
+          docs.finish();
+          if (doc != totalDocs) {
+            throw new CorruptIndexException("Docs don't add up", docsIn);
+          }
+        } catch (Throwable e) {
+          priorE = e;
+        } finally {
+          CodecUtil.checkFooter(docsIn, priorE);
+        }
+      }
+      dir.deleteFile(docsOut.getName());
+      docsOut = null;
+
+      metaOut.writeLong(dataOut.getFilePointer());
+      try (ChecksumIndexInput filePointersIn = dir.openChecksumInput(filePointersOut.getName())) {
+        CodecUtil.checkHeader(
+            filePointersIn, codecName + "FilePointers", VERSION_CURRENT, VERSION_CURRENT);
+        Throwable priorE = null;
+        try {
+          final DirectMonotonicWriter filePointers =
+              DirectMonotonicWriter.getInstance(metaOut, dataOut, totalChunks + 1, blockShift);
+          long fp = 0;
+
+          for (int i = 0; i < totalChunks; ++i) {
+            fp += filePointersIn.readVLong();
+            filePointers.add(fp);
+          }
+          if (maxPointer < fp) {
+            throw new CorruptIndexException("File pointers don't add up", filePointersIn);
+          }
+          filePointers.add(maxPointer);
+          filePointers.finish();
+        } catch (Throwable e) {
+          priorE = e;
+        } finally {
+          CodecUtil.checkFooter(filePointersIn, priorE);
+        }
+      }
+      dir.deleteFile(filePointersOut.getName());
+      filePointersOut = null;
+
+      metaOut.writeLong(dataOut.getFilePointer());
+      metaOut.writeLong(maxPointer);
+
+      CodecUtil.writeFooter(dataOut);
+    }
+}
+````
+我们首先会向fdm中写入`numDocs`,`blockShift`,`totalChunks+1`,`dataOut.getFilePointer()`
+1. `numDocs` 全量的doc数
+2. `blockShift` 用于解压以及压缩的元信息
+3. `totalChunks+1` 全部的chunk数+1 
+4. `dataOut.getFilePointer()` 文件fdx下一个待写入的位置。
+
+随后将文件seg-xx-doc_ids中保存的内容压缩后写入fdx中， 并将解压所需要的元信息写入fdm，最后将fdx下一个待写入的位置写入fdm。
+同样的方式将seg-xx-file_pointers中保存的内容压缩后写入fdx中， 并将解压所需要的元信息写入fdm，并将fdx以及fdt下一个待写入的位置写入fdm。
+最终的状态如下图所示
+<div style="text-align: center">
+<img src="/pic/lucene-forward/fdx-finish.png"/>
+</div>
+从图中，我们注意到fdm的`Header`后的`chunkSize`并没有在上述代码中体现，这是因为这个变量是在创建fdm时就写入的。
+
+完成上述步骤后,我们只需要往fdm中写入`numChunks`,`numDirtyChunks`,`numDirtyDocs`
+````java
+@Override
+public void finish(int numDocs) throws IOException {
+    //skip...
+    metaStream.writeVLong(numChunks);
+    metaStream.writeVLong(numDirtyChunks);
+    metaStream.writeVLong(numDirtyDocs);
+    CodecUtil.writeFooter(metaStream);
+    CodecUtil.writeFooter(fieldsStream);
+    assert bufferedDocs.size() == 0;
+}
+````
+最后完整的的索引文件如下图所示
+<div style="text-align: center">
+<img src="/pic/lucene-forward/finish-write.png"/>
+</div>
+
+### Overview
+最后给出一张索引文件的概略以及相互的关系图
+<div style="text-align: center">
+<img src="/pic/lucene-forward/overview.png"/>
+</div>
