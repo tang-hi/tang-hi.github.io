@@ -13,13 +13,13 @@ math: true
 
 ## 什么是正排索引
 
-简单来说，正排索引就是可以通过`docID` 查询到对应的文档。我们可以将其类比为KV，`docID`为Key，文档内容为Value。
+简单来说，正排索引就是可以通过docID 查询到对应的文档。我们可以将其类比为键值对（Key-Value），其中docID为Key，文档内容为Value。
 
 <div style="text-align: center">
 <img src="/pic/lucene-forward/doc-first.png"/>
 </div>
 
-因此Lucene的正排索引在磁盘中的layout必须可以通过`docID`快速定位到文档的内容。
+因此，Lucene的正排索引在磁盘中的布局必须能够通过docID快速定位到文档的内容。
 
 ## 正排索引的构建
 
@@ -101,7 +101,7 @@ void writeField(FieldInfo info, StoredValue value) throws IOException {
   }
 ````
 
-我们可以发现在处理正排索引时，我们使用`writeField`对文档中的每一个字段进行处理。
+我们可以发现在处理正排索引时，我们使用writeField对文档中的每一个字段进行处理。
 
 我们看一下对于定长以及变长的字段，Lucene分别是如何处理的。
 
@@ -124,7 +124,7 @@ void writeField(FieldInfo info, StoredValue value) throws IOException {
   }
 ````
 
-相同点是每写一个字段，都会`numStoredFieldsInDoc++`，这个变量很好理解，记录这篇文档中存储了多少个字段。随后会向`bufferedDocs`（可以认为是一个内存数组）添加这个字段的相关信息。
+我们可以发现，无论字段是定长还是变长，每写入一个字段，都会使`numStoredFieldsInDoc`增加1。这个变量很好理解，它记录了这篇文档中存储了多少个字段。随后会向`bufferedDocs`（可以认为是一个内存数组）添加这个字段的相关信息。
 
 字段的相关信息我们可以认为有三种
 
@@ -132,7 +132,7 @@ void writeField(FieldInfo info, StoredValue value) throws IOException {
 2. 字段的数据类型
 3. 字段的数据，即该字段的值。
 
-因为字段的数据类型只是有限的几种，因此Lucene会将其与字段的编号一起存储为一个long类型
+因为字段的数据类型只有有限的几种，因此Lucene会将其与字段的编号一起存储为一个long类型
 
 ````java
 final long infoAndBits = (((long) info.number) << TYPE_BITS) | NUMERIC_DOUBLE;
@@ -146,7 +146,7 @@ final long infoAndBits = (((long) info.number) << TYPE_BITS) | NUMERIC_DOUBLE;
 <img src="/pic/lucene-forward/bufferedDocs.png"/>
 </div>
 
-当处理完每篇文档的字段后，我们可以认为我们已经将这篇文档buffer存在了内存中，而后我们需要做的就是对正排索引进行收尾工作，即将其flush到磁盘中。
+当处理完每篇文档的字段后，我们可以认为我们已经将这篇文档缓存在了内存中，而后我们需要做的就是对正排索引进行收尾工作，即将其flush到磁盘中。
 对文档的正排索引进行收尾工作的函数为`finishDocument`
 ````java
 @Override
@@ -165,7 +165,8 @@ public void finishDocument() throws IOException {
     }
 }
 ````
-在这个函数中我们会发现它一共干了四件事
+在这个函数中我们会发现它一共做了四件事
+
 1. 将每一篇文档中需要进行存储的字段数量记录下来，保存在数组`numStoredFields`中
 2. 记录下这篇文档最后一个byte的写入位置，保存在数组`endOffsets`中
 3. 记录下目前已经在内存中存储的文档数，保存在变量`numBufferedDocs`。
