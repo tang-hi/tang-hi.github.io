@@ -1,7 +1,18 @@
----
-title: "Map Reduce"
-date: 2022-11-15
----
++++
+title = "Map Reduce"
+date = "2022-11-15"
+categories = [
+    "Distributed System",
+]
+commentable = true
+nofeed = true
+math = true
+notaxonomy = false
+hidden = false
+norobots = false 
+nodate = false
+description = "MapReduce本质上是为了处理大数据而诞生的框架，它含有两个原语，分别是Map和Reduce(从函数式编程中借鉴过来的概念)，而这两个原语因为抽象程度高，因此可以相互组合完成大部分的大数据处理任务"
++++
 [MapReduce](https://research.google/pubs/pub62/)是谷歌在2004年发表的论文,根据它在论文中的描述
 > MapReduce is a programming model and an associated implementation for processing and generating large data sets. Users specify a map function that processes a key/value pair to generate a set of intermediate key/value pairs, and a reduce function that merges all intermediate values associated with the same intermediate key. Many real world tasks are expressible in this model, as shown in the paper.
 

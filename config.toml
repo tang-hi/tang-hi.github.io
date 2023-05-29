@@ -1,19 +1,36 @@
-baseURL = 'https://tang-hi.github.io/'
+BaseURL = 'https://tang-hi.github.io/'
 author = "tang donghai"
 languageCode = 'en-us'
-disqusShortname = 'tang-hi'
-title = "tang-hi's Blog"
-theme = "paper"
-googleAnalytics = "G-D5M6G40M25"
-[params]
-  color = 'linen'
+defaultContentLanguage = "en"
+disqusShortname = 'tangdh.life'
+title = "Tangdh's Blog"
+theme = "Vitae"
+paginate = 5
+enableRobotsTXT = true
 
+pygmentsstyle = "colorful"
+pygmentscodefences = true
+pygmentscodefencesguesssyntax = true
+
+googleAnalytics = "G-D5M6G40M25"
+
+
+[params]
+  
   github = 'tang-hi'
 
-  avatar = 'tangdhcs@gmail.com'
+  description = "Learn By Doing"
+
+  avatar = 'avatar.jpeg'
   name = 'tang donghai'
   bio = 'take it easy'
-# ------------------------------
+  math = true
+
+  # Show reading time on a post
+	readingTime = true 
+
+	# Show word count on a post
+	wordCount = true 
 
 # needed to  render raw HTML (e.g. <sub>, <sup>, <kbd>, <mark>)
 [markup]
@@ -21,42 +38,55 @@ googleAnalytics = "G-D5M6G40M25"
     [markup.goldmark.renderer]
       unsafe = true
 
-[menu]
-
-  [[menu.main]]
-    identifier = "about"
-    name = "About"
-    url = "/about/"
-    weight = 10
-
 [taxonomies]
 category = "categories"
 tag = "tags"
 series = "series"
 
-[privacy]
+[params.comments]
+# Enable Comments with "true"
+enabled = true
+engine = "disqus"
 
-  [privacy.vimeo]
-    disabled = false
-    simple = true
+# Navigation
+[[menu.main]]
+name = "Home"
+url = "/"
+weight = 1
 
-  [privacy.twitter]
-    disabled = false
-    enableDNT = true
-    simple = true
+[[menu.main]]
+name = "All Posts"
+url = "/posts"
+weight = 2
 
-  [privacy.instagram]
-    disabled = false
-    simple = true
+[[menu.main]]
+name = "About"
+url = "/about"
+weight = 3
 
-  [privacy.youtube]
-    disabled = false
-    privacyEnhanced = true
 
-[services]
+[[menu.main]]
+name = "Categories"
+url = "/categories"
+weight = 5
 
-  [services.instagram]
-    disableInlineCSS = true
 
-  [services.twitter]
-    disableInlineCSS = true
+[[params.social]]
+name = "Github"
+icon = "fab fa-github"
+url = "https://github.com/tang-hi"
+
+[[params.social]]
+name = "Email"
+icon = "fas fa-envelope"
+cmd = "mailto:tangdhcs@gmail.com"
+
+[[params.social]]
+name = "Twitter"
+icon = "fab fa-twitter"
+url = "https://twitter.com/TangDh"
+
+[[params.social]]
+name = "RSS"
+icon = "fas fa-rss"
+url = "index.xml"

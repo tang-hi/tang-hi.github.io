@@ -1,7 +1,18 @@
----
-title: "More Effective C++"
-date: 2023-02-11
----
++++
+title = "More Effective C++"
+date = "2023-02-11"
+categories = [
+    "C++",
+]
+commentable = true
+nofeed = true
+math = true
+notaxonomy = false
+hidden = false
+norobots = false 
+nodate = false
+description = "这篇博客主要是用来加深自己对读过的书的记忆。写的内容可能只对我自己产生价值:smile:"
++++
 
 ## 读书笔记: More Effective C++
 

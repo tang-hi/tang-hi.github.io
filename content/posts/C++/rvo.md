@@ -1,8 +1,18 @@
----
-title: "RVO"
-date: 2023-01-15
----
-## Return Value Optimization ---- 汇编视角
++++
+title = "Return Value Optimization"
+date = "2023-01-15"
+categories = [
+    "C++",
+]
+commentable = true
+nofeed = true
+math = true
+notaxonomy = false
+hidden = false
+norobots = false 
+nodate = false
+description = "这篇文章是因为在油管上看了Jon Kalb在2018年的CppCon上做的演讲，深受启发，决定换一个视角来审视C++的RVO机制。"
++++
 
 之所以写这篇文章是因为在油管上看了Jon Kalb在2018年的CppCon上做的[演讲](https://www.youtube.com/watch?v=IZbL-RGr_mk&list=PLhPcHQ7xzdwcG9OFqP4Xg_7nn6RGVFsw9&index=1)，深受启发，决定换一个视角来审视C++的RVO机制。
 

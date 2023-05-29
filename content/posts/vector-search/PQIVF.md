@@ -1,10 +1,18 @@
----
-title: "PQIVF(Prodcut Quantization)"
-date: 2023-04-05
-math: true
----
-
-## PQIVF(Product Quantization)
++++
+title = "PQIVF(Prodcut Quantization)"
+date = "2023-04-05"
+categories = [
+    "vector search",
+]
+commentable = true
+nofeed = true
+math = true
+notaxonomy = false
+hidden = false
+norobots = false 
+nodate = false
+description = "Product Quantization是一种用于向量量化的方法，由Hervé Jégou和Olivier Chum于2011年在论文<<Product quantization for nearest neighbor search>>中首次提出。"
++++ 
 
 Product Quantization是一种用于向量量化的方法，由Hervé Jégou和Olivier Chum于2011年在论文[《Product quantization for nearest neighbor search》](https://lear.inrialpes.fr/pubs/2011/JDS11/jegou_searching_with_quantization.pdf)中首次提出。这篇论文解决了在大规模数据集上进行最近邻搜索的问题。相较于其他的ANN搜索算法通过牺牲一定的内存空间来减少搜索空间，PQ通过对向量进行量化压缩，使得所需要的内存空间大幅减小。
 

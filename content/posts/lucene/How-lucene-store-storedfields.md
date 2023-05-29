@@ -1,8 +1,19 @@
----
-title: "How Lucene Stores Its Forward Index"
-date: 2023-05-23
-math: true
----
++++
+title = "How Lucene Stores Its Forward Index"
+date = "2023-05-23"
+categories = [
+    "Lucene",
+    "Full Text Search"
+]
+commentable = true
+nofeed = true
+math = true
+notaxonomy = false
+hidden = false
+norobots = false 
+nodate = false
+description = "This article will introduce how Lucene 9.6 stores its forward index, to help readers better understand its internal workings."
++++
 
 
 This article will introduce how Lucene 9.6 stores its forward index, to help readers better understand its internal workings.

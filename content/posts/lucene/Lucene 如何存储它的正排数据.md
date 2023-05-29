@@ -1,8 +1,19 @@
----
-title: "Lucene 如何存储它的正排索引"
-date: 2023-05-23
-math: true
----
++++
+title = "Lucene如何存储正排索引"
+date = "2023-05-23"
+categories = [
+    "Lucene",
+    "Full Text Search"
+]
+commentable = true
+nofeed = true
+math = true
+notaxonomy = false
+hidden = false
+norobots = false 
+nodate = false
+description = "本文将介绍Lucene9.6如何存储它的正排索引，以帮助读者更好地理解其内部工作原理。"
++++
 
 
 本文将介绍Lucene9.6如何存储它的正排索引，以帮助读者更好地理解其内部工作原理。

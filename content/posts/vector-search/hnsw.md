@@ -1,8 +1,18 @@
----
-title: "HNSW (Hierarchical Navigable Small World)"
-date: 2023-03-25
----
-## HNSW(Hierarchical Navigable Small World)
++++
+title = "HNSW (Hierarchical Navigable Small World)"
+date = "2023-03-25"
+categories = [
+    "vector search",
+]
+commentable = true
+nofeed = true
+math = true
+notaxonomy = false
+hidden = false
+norobots = false 
+nodate = false
+description = "HNSW是通过图的方式来解决向量搜索问题的算法，由Y.Malkov与D.Yashunin首次提出。"
++++
 HNSW是通过图的方式来解决向量搜索问题的算法，由Y.Malkov与D.Yashunin在[论文](https://arxiv.org/pdf/1603.09320.pdf)中首次提出。
 
 这一个Section安排如下
