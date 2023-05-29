@@ -47,6 +47,9 @@ series = "series"
 # Enable Comments with "true"
 enabled = true
 engine = "disqus"
+[params.comments.disqus]
+shortname = "tangdh-life" # Paste the shortname from your Disqus dashboard.
+
 
 # Navigation
 [[menu.main]]
