@@ -344,5 +344,62 @@ while (true) {
 ### ldb文件的格式与生成
 当把WriteBatch所有的`(key, value,tag)`，全部插入`MemTable`后，`Put`流程就算结束了。 ldb文件的格式与生成，应当属于compact中的内容。但是趁现在对`MemTable`的记性还比较新，可以顺便将`ldb文件`一起讲了。而且`ldb文件`本质上就是将`MemTable`落盘，内容上也不算突兀。
 
+ldb文件由五部分组成
+
+1. data blocks
+2. filter blcoks
+3. filterindex block
+4. index block
+5. footer
+
+其中`data blocks`中保存着KV数据，`filter blocks`中存储着布隆过滤器，`filterindex block`存储着指向`filter blocks`的索引，`index block`存储着指向`data blocks`的索引，`footer`存储着指向`filterindex block`和`index block`的索引。
+
+我们先看一下组成`data block`以及`index block`的基础组成部分。
+<div style="text-align: center">
+<img src="/pic/levelDB/block-layout.png"/>
+</div>
+
+因为`data block`和`index block`都是由KV组成，`data block`的Key是skipList的`internal key`, Value是用户输入的`Value`.`index block`的Key是每个`data block`的最后一个Key, Value是`data block`的`handle`.
+
+我们可以详细看一下这个Block的结构组成,因为我们的Key是按照顺序的,因此我们可以使用仅存储两个Key不同的部分,从而减少空间占用,因此我们先存储两个Key相同的长度大小,需要存储的Key的大小,Value的长度大小,存储的Key的内容,存储的Value内容.我们可以通过下面的例子更好的阐述一下这个概念
+
+<div style="text-align: center">
+<img src="/pic/levelDB/block-demo.png"/>
+</div>
+
+如图所示,因为`hello`以及`hellz`共享`hell`,因此对于`hellz`我们仅需要存储z即可.
+
+每个 block 的前缀压缩不是从第一个数据项开始就一直下去, 而是每隔一段(间隔可配置)设置一个新的前缀压缩起点(作为新起点的数据项的 key 保存原值而非做前缀压缩), `restart`指的就是新起点, 从这个地方开始继续做前缀压缩.在写入文件前,我们还需要对KV对以及restart数据一起进行压缩,压缩的方式由`compress type`表示,
+
+因此单个`Block`由`KV对`, `restart数组`,`restart数组长度`,`压缩类型`,`CRC校验和`组成.而`data block`以及`index block`则是由一个个`Block`组成.
+
+而`filter block`则是根据`data block`的大小生成布隆过滤器,默认每2K个大小生成一个布隆过滤器.它的存储结构为
+<div style="text-align: center">
+<img src="/pic/levelDB/filter-block.png"/>
+</div>
+
+开始存着一系列的布隆过滤器,然后是各个布隆过滤器的offset数组,紧跟着offset的offset(通过该值找到offset,因为offset是数组是一个变值),最后跟的是这个`filter block`的元信息(`data block`数据多大后产生一个布隆过滤器)
+
+而`filter index block`则使用`Block`的存储格式存储着**Key: "filter.${filter.name}", Value: offset and size of filter block**
+
+最后的`Footer`的格式则为下图所示.
+<div style="text-align: center">
+<img src="/pic/levelDB/footer.png"/>
+</div>
+
+`Footer`中存储着`filter index block`的指针以及`index block`的指针以及`magic number`
+
+在介绍完各个模块的磁盘结构后,我们可以看一下ldb文件的全貌,以及各部分之间的关系,如下图所示.
+<div style="text-align: center">
+<img src="/pic/levelDB/ldb-overview.png"/>
+</div>
+
+在了解了整个全貌后,我们可以看一下整个生成的流程是怎么样的.
+1. 首先构建出一个新的`TableBuilder`, 然后按序将`Memtable`中的数据写入`TableBuilder`.
+2. `TableBuilder`将数据全部写入`data block`中 **(按照Block的格式写)**
+3. 当Block的大小超过4K时,将生成的`data block`落盘,**尝试**生成一个`filter block`,并生成一个`index handle`,将其插入到`index block`中.(注意,这里插入index block前,会尝试缩短key的大小,详情请参考代码`Comparator::FindShortestSeparator`).
+
+最后等所有数据添加完后,依次写入`data block`, `filter block`, `filter index block`, `index block`,以及`footer`
+
 ### Overview
 本文介绍了LevelDB的写操作的流程，以及相关文件的生成与格式。这篇文章并没有将所有的细节都写出来，如果你想要详细了解，我推荐你还是需要去读相关代码。这篇文章更侧重描写出LevelDB的大概轮廓，以及一些比较重要的细节。希望对你理解LevelDB相关代码有所帮助。
