@@ -5,7 +5,7 @@ defaultContentLanguage = "en"
 disqusShortname = 'tangdh-life'
 title = "Tangdh's Blog"
 theme = "Vitae"
-paginate = 5
+paginate = 10
 enableRobotsTXT = true
 
 pygmentsstyle = "colorful"
