@@ -383,9 +383,9 @@ int main()
 尽管A和C同步,B和D同步. 但是E和B, F和A并不同步,他们仍然可能读到的是false.从而导致assert失败.(因为读到了线程本地的cache)
 
 #### Fence
-当`std::memory_order_acquire`用于`std::atomic_thread_fence`等价于禁止(LOADSTORE, LOADLOAD)重排序
+当`std::memory_order_acquire`用于`std::atomic_thread_fence`等价于禁止LOAD，STORE重排序到这条语句前，同时禁止LOAD语句重排序到这条语句后。
 
-当`std::memory_order_acquire`用于`std::atomic_thread_fence`等价于禁止(STORESTORE, LOADSTORE)重排序
+当`std::memory_order_acquire`用于`std::atomic_thread_fence`等价于禁止LOAD，STORE重排序到这条语句后，同时禁止STORE语句重排序到这条语句前。
 
 
 ### Overview
