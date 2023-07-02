@@ -1,5 +1,14 @@
 <head>
 <meta charset="UTF-8">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-D5M6G40M25"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-D5M6G40M25');
+</script>
 <meta name="baidu-site-verification" content="codeva-vs6hGikUak" />
 {{- if .IsHome }}
 <title>{{ .Site.Title }}{{ if isset .Site.Params "pagetitle" }} - {{ .Site.Params.Pagetitle }}{{ end }}</title>

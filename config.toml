@@ -12,7 +12,7 @@ pygmentsstyle = "colorful"
 pygmentscodefences = true
 pygmentscodefencesguesssyntax = true
 
-googleAnalytics = "G-D5M6G40M25"
+# googleAnalytics = "G-D5M6G40M25"
 
 
 [params]
