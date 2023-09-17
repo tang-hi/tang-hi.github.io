@@ -126,7 +126,7 @@ DuckDB与其他数据库不同，它将所有的信息都存储在了同一个�
 <img src="/pic/duckdb/row-group.png"/>
 </div>
 
-前两个字段十分好理解，第一个存储着表的统计信息，另一个存储着 `row group` 数量。
+最开始存储的是一系列column数据的元信息（后面会介绍column data block的结构)，后两个个字段十分好理解，第一个存储着表的统计信息，另一个存储着 `row group` 数量。
 这里引出两个问题，什么是`row group` ，为什么存储格式不和前面一样即<data-count, data, data, ... data>.而是只存储了一个`row group pointer`,如果`row group count` 大于1怎么办？
 
 ### row group
