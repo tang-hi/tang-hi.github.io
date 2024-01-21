@@ -14,7 +14,7 @@ nodate = false
 description = "通过数学的方式确定CPU利用率，延迟，吞吐量之间的关系"
 +++
 
-本文从排队论的角度出发分析CPU利用率，延迟和吞吐量之间的关系，这篇文章大量参考[猫叔的文章](https://blog.betacat.io/post/2023/05/explain-latency-and-utilization-using-queueing-theory/), [油管视频](https://www.youtube.com/watch?v=Hda5tMrLJqc), 
+本文从排队论的角度出发分析CPU利用率，延迟和吞吐量之间的关系，这篇文章大量参考[喵叔的文章](https://blog.betacat.io/post/2023/05/explain-latency-and-utilization-using-queueing-theory/), [油管视频](https://www.youtube.com/watch?v=Hda5tMrLJqc), 
 本质上只是简单的复述，作为我自己学习的整理。
 
 ## CPU利用率和延迟之间的关系
