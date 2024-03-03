@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><script src="/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=livereload" data-no-instant defer></script>
+<meta charset="UTF-8">
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-D5M6G40M25"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-D5M6G40M25');
+</script>
+<meta name="baidu-site-verification" content="codeva-vs6hGikUak" />
+<title>C&#43;&#43; Memory Model | Don&#39;t Panic</title>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="generator" content="Hugo 0.123.7">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="这篇文章是因为对C&#43;&#43;的内存模型和内存顺序感兴趣，在探索后对所学的知识进行一个总结，希望能以一个便于理解的方式让读者轻松了解C&#43;&#43;的Memory Model">
+<link rel="stylesheet" type="text/css" media="screen" href="/css/normalize.css" />
+<link rel="stylesheet" type="text/css" media="screen" href="/css/main.css" />
+<link rel="stylesheet" type="text/css" media="screen" href="/css/all.css" /><link rel="stylesheet" href="/css/katex.css" crossorigin="anonymous">
+<script defer src="/js/katex.js"  integrity="sha384-PFWG8XW41D5NzhNv5FegM1CUkw9nNLdWug8DuwnUoNEVop9n5frjcnbtsZtxTNjw" crossorigin="anonymous"></script>
+<script defer src="/js/auto-render.js" integrity="sha384-EN2q+JG5/3Z8gD7hT5WZqq+W+9wQR4P3IezfuZmGG5RkNXaaaks85seDJO7WkZlY" crossorigin="anonymous" onload="renderMathInElement(document.body);"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() { renderMathInElement(document.body, { delimiters: [ {left: "$$", right: "$$", display: true}, {left: "$", right: "$", display: false} ] }); });
+</script>
+
+
+
+
+<meta property="og:title" content="C&#43;&#43; Memory Model" />
+<meta property="og:description" content="这篇文章是因为对C&#43;&#43;的内存模型和内存顺序感兴趣，在探索后对所学的知识进行一个总结，希望能以一个便于理解的方式让读者轻松了解C&#43;&#43;的Memory Model" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="http://localhost:1313/posts/c&#43;&#43;/memory-order/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-05-15T00:00:00+00:00" />
+<meta property="article:modified_time" content="2023-05-15T00:00:00+00:00" />
+
+<meta name="twitter:card" content="summary"/><meta name="twitter:title" content="C&#43;&#43; Memory Model"/>
+<meta name="twitter:description" content="这篇文章是因为对C&#43;&#43;的内存模型和内存顺序感兴趣，在探索后对所学的知识进行一个总结，希望能以一个便于理解的方式让读者轻松了解C&#43;&#43;的Memory Model"/>
+
+<meta itemprop="name" content="C&#43;&#43; Memory Model">
+<meta itemprop="description" content="这篇文章是因为对C&#43;&#43;的内存模型和内存顺序感兴趣，在探索后对所学的知识进行一个总结，希望能以一个便于理解的方式让读者轻松了解C&#43;&#43;的Memory Model"><meta itemprop="datePublished" content="2023-05-15T00:00:00+00:00" />
+<meta itemprop="dateModified" content="2023-05-15T00:00:00+00:00" />
+<meta itemprop="wordCount" content="719">
+<meta itemprop="keywords" content="" />
+</head>
+<body>
+<header>
+<div id="avatar">
+<a href="http://localhost:1313/"><img src="/avatar.jpeg" alt="Don&#39;t Panic"></a>
+</div>
+<div id="titletext">
+<h2 id="titleonly"><a href="http://localhost:1313/">Don&#39;t Panic</a></h2>
+</div>
+<div id="title-social">
+<div id="social">
+<nav><ul>
+<li><a href="https://github.com/tang-hi"><i title="Github" class="icons fab fa-github"></i></a></li>
+<li><a href="mailto:tangdhcs@gmail.com"><i title="Email" class="icons fas fa-envelope"></i></a></li>
+<li><a href="https://twitter.com/TangDh"><i title="Twitter" class="icons fab fa-twitter"></i></a></li>
+<li><a href="/index.xml"><i title="RSS" class="icons fas fa-rss"></i></a></li>
+<li><a><i title="Switch Dark Mode" class="dark-mode icons fas fa-moon"></i></a></li>
+</ul></nav>
+</div>
+</div>
+<div id="mainmenu">
+<nav>
+<ul>
+<li><a href="/">Home</a></li>
+<li><a href="/posts">All Posts</a></li>
+<li><a href="/about">About</a></li>
+<li><a href="/categories">Categories</a></li>
+</ul>
+</nav>
+</div>
+</header>
+<main>
+<div class="post">
+<article>
+<div class="post-header">
+<div class="meta">
+<div class="date">
+<span class="day">15</span>
+<span class="rest">May 2023</span>
+</div>
+</div>
+<div class="matter">
+<h1 class="title">C&#43;&#43; Memory Model</h1>
+<p class="post-meta">
+<span class="post-meta">
+
+&nbsp;<i class="fas fa-clock"></i>&nbsp;4&nbsp;minutes
+
+
+ 
+&nbsp;| &nbsp;
+
+<i class="fas fa-book"></i>&nbsp;719&nbsp;words
+
+
+
+
+</span>
+
+</p>
+</div>
+</div>
+<div class="markdown">
+<p>这篇文章是因为对C++的内存模型和内存顺序感兴趣，在探索后对所学的知识进行一个总结，希望能以一个便于理解的方式让读者轻松了解C++的Memory Model.我们不会直接讨论<code>memory model</code>做了什么,而是它<strong>要做什么</strong>, 在它出来之前我们是怎么做的，它是怎么集成了之前的做法，从而形成它独有的模型。</p>
+<h2 id="data-race的原因">Data Race的原因</h2>
+<p>首先我们知道，如果出现了<code>Data Race</code>的情况，最简单的方式就是一把大锁保平安，但是为什么锁就可以保证不出现<code>Data Race</code>? 锁究竟对我们的代码做了什么，从而导致<code>Data Race</code>的情况消失了? 这就是我们这篇文章想探索的问题。</p>
+<h3 id="compiler优化">Compiler优化</h3>
+<p>我们通过两个示例代码来阐述为什么编译器的优化会造成Data Race。</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c++" data-lang="c++"><span style="display:flex;"><span><span style="color:#339;font-weight:bold">int</span> Value <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">0</span>;
+</span></span><span style="display:flex;"><span><span style="color:#339;font-weight:bold">int</span> IsPublished <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">0</span>;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#339;font-weight:bold">void</span> <span style="color:#06b;font-weight:bold">sendValue</span>(<span style="color:#339;font-weight:bold">int</span> x)
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>    Value <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">1</span> <span style="color:#333">+</span> x;
+</span></span><span style="display:flex;"><span>    IsPublished <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">1</span> ;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>先看第一个例子</p>
+<ol>
+<li>设置<code>Value</code>的值</li>
+<li>设置<code>IsPublished = 1</code></li>
+</ol>
+<p>如果我们有另一个线程，它会不断读取<code>IsPublished</code>,当<code>IsPublished == 1</code>时再去读取<code>Value</code>的值。在这种情况下，我们另一个线程可能读到<code>Value</code>的值为0！为什么？我们看一下这份代码所产生的汇编代码 <strong>(如果没有特特殊说明, 我们使用的编译器为gcc9.5, 采用-O2 -std=c++11编译选项)</strong></p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-asm" data-lang="asm"><span style="display:flex;"><span><span style="color:#06b;font-weight:bold">sendValue</span>(<span style="color:#036;font-weight:bold">int</span>):
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">mov</span>     <span style="color:#036;font-weight:bold">DWORD</span> <span style="color:#036;font-weight:bold">PTR</span> <span style="color:#036;font-weight:bold">IsPublished</span>[<span style="color:#036;font-weight:bold">rip</span>], <span style="color:#00d;font-weight:bold">1</span>             <span style="color:#888">## first set isPublished = 1
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>        <span style="color:#06b;font-weight:bold">add</span>     <span style="color:#036;font-weight:bold">edi</span>, <span style="color:#00d;font-weight:bold">2</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">mov</span>     <span style="color:#036;font-weight:bold">DWORD</span> <span style="color:#036;font-weight:bold">PTR</span> <span style="color:#036;font-weight:bold">Value</span>[<span style="color:#036;font-weight:bold">rip</span>], <span style="color:#036;font-weight:bold">edi</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">ret</span>
+</span></span></code></pre></div><p>从汇编代码中可以发现汇编与代码的顺序相反，我们首先设置<code>IsPublished = 1</code>，再设置<code>Value</code>的值。这就导致另一个线程看到<code>IsPublished = 1</code>时，<code>Value</code>的值可能还未设置。从而发生了<code>Data Race</code>。这是因为编译器在编译时，为了性能考虑，它可以任意交换代码的顺序。只要<strong>单线程执行，交换顺序后的结果与不交换的结果保持一致</strong>，我们将其称为<code>as-if法则</code>。因为<code>IsPublished</code>，<code>Value</code>是两个不相关的变量，交换它们的执行顺序并不会导致单线程的执行结果被改变，所以编译器可以进行这种优化，尽管对于多线程的程序来说，这会导致<code>Data Race</code>.</p>
+<p>我们再来看另一个例子</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span><span style="color:#339;font-weight:bold">int</span> value <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">90</span>;
+</span></span><span style="display:flex;"><span><span style="color:#339;font-weight:bold">void</span> <span style="color:#06b;font-weight:bold">foo</span>() {
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    value <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">100</span>;               <span style="color:#888">// A                
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>    <span style="color:#080;font-weight:bold">while</span>(value <span style="color:#333">==</span> <span style="color:#00d;font-weight:bold">100</span>)
+</span></span><span style="display:flex;"><span>    {
+</span></span><span style="display:flex;"><span>        <span style="color:#888">// do something
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#888">// exit loop
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#339;font-weight:bold">void</span> <span style="color:#06b;font-weight:bold">end</span>() {
+</span></span><span style="display:flex;"><span>    value <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">99</span>;				  <span style="color:#888">// B
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>}
+</span></span></code></pre></div><p>假设我们有两个线程，一个执行<code>foo</code>,一个执行<code>end</code>. 我们的预期是如果<code>A</code>比<code>B</code>先执行(假定都是原子操作)，线程<code>foo</code>会跳出循环。但是实际上<code>foo</code>可能永远都不会结束。还是老样子，我们看看汇编代码说了什么。</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-asm" data-lang="asm"><span style="display:flex;"><span><span style="color:#06b;font-weight:bold">foo</span>():
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">mov</span>     <span style="color:#036;font-weight:bold">DWORD</span> <span style="color:#036;font-weight:bold">PTR</span> <span style="color:#036;font-weight:bold">value</span>[<span style="color:#036;font-weight:bold">rip</span>], <span style="color:#00d;font-weight:bold">100</span>
+</span></span><span style="display:flex;"><span><span style="color:#970;font-weight:bold">.L21:</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">jmp</span>     <span style="color:#036;font-weight:bold">.L21</span>                 <span style="color:#888"># loop forever
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span><span style="color:#06b;font-weight:bold">end</span>():
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">mov</span>     <span style="color:#036;font-weight:bold">DWORD</span> <span style="color:#036;font-weight:bold">PTR</span> <span style="color:#036;font-weight:bold">value</span>[<span style="color:#036;font-weight:bold">rip</span>], <span style="color:#00d;font-weight:bold">99</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">ret</span>
+</span></span></code></pre></div><p>我们可以发现汇编后的<code>foo</code>，本质上就是一个死循环,它在将<code>value</code>设置为100后，就不停的循环下去了，根本不会再校验<code>value</code>的值。其原因也是<code>as-if法则</code>,因为上一条语句已经将<code>value</code>设置为100了，因此对于单线程来说，直接将语句转化为死循环就行了，不需要浪费时间再去检查<code>value</code>值了。</p>
+<p>从上面的两个例子中，我们可以看到编译器的优化尽管会增加单线程的效率，但是会破坏多线程的正确性。因此C++的<code>memory order</code>一定需要解决这个问题。在这一小节，我不会过多阐述C++的<code>memory order</code>是怎么做的，而是阐述<code>我们之前是怎么做的</code>。在下一节，我们才会正式介绍C++的<code>memory order</code>。</p>
+<h4 id="如何解决"><strong>如何解决</strong></h4>
+<p>我们有两个方式可以禁止Compiler的优化</p>
+<ol>
+<li>使用Compiler barrier</li>
+<li>使用<code>volatile</code>关键字</li>
+</ol>
+<h4 id="compiler-barrier"><strong>Compiler barrier</strong></h4>
+<p>在代码中直接插入<code>asm volatile (&quot;&quot; ::: &quot;memory&quot;)</code>,可以保证</p>
+<ol>
+<li>在<code>compiler barrier</code>后的代码不会被编译器优化到<code>compiler barrier</code>前</li>
+<li>在<code>compiler barrier</code>前的代码不会被编译器优化到<code>compiler barrier</code>后</li>
+</ol>
+<p>我们直接看第一个例子添加<code>asm volatile (&quot;&quot; ::: &quot;memory&quot;)</code>后的汇编代码，可以发现<code>IsPublished = 1;</code>的汇编语句出现在了<code>Value = x + 2;</code>后，从而禁止了编译器不恰当的优化！( <strong>compiler barrier 仅在编译阶段生效</strong> )</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-asm" data-lang="asm"><span style="display:flex;"><span><span style="color:#888"># void sendValue(int x)
+</span></span></span><span style="display:flex;"><span><span style="color:#888"># {
+</span></span></span><span style="display:flex;"><span><span style="color:#888">#     Value = x + 2;
+</span></span></span><span style="display:flex;"><span><span style="color:#888">#     asm volatile(&#34;&#34; ::: &#34;memory&#34;);
+</span></span></span><span style="display:flex;"><span><span style="color:#888">#     IsPublished = 1 ;
+</span></span></span><span style="display:flex;"><span><span style="color:#888"># } 
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>
+</span></span><span style="display:flex;"><span><span style="color:#06b;font-weight:bold">sendValue</span>(<span style="color:#036;font-weight:bold">int</span>):
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">add</span>     <span style="color:#036;font-weight:bold">edi</span>, <span style="color:#00d;font-weight:bold">2</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">mov</span>     <span style="color:#036;font-weight:bold">DWORD</span> <span style="color:#036;font-weight:bold">PTR</span> <span style="color:#036;font-weight:bold">Value</span>[<span style="color:#036;font-weight:bold">rip</span>], <span style="color:#036;font-weight:bold">edi</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">mov</span>     <span style="color:#036;font-weight:bold">DWORD</span> <span style="color:#036;font-weight:bold">PTR</span> <span style="color:#036;font-weight:bold">IsPublished</span>[<span style="color:#036;font-weight:bold">rip</span>], <span style="color:#00d;font-weight:bold">1</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">ret</span>
+</span></span></code></pre></div><p><strong>volatile</strong></p>
+<p>通过将变量声明为<code>volatile</code>,我们告诉编译器，这个变量可能在程序之外被修改（在嵌入式中使用的较多）。因此编译器会对该变量作出如下保证。</p>
+<ol>
+<li>保证该变量一定会从内存中读取，而不是寄存器。</li>
+<li>编译器不会将含有该变量的语句优化掉。</li>
+<li>编译器不会将标记为<code>volatile</code>的变量进行重排序（不仅是该变量，而是所有被标记为<code>volatile</code>的变量）。</li>
+</ol>
+<p>我们看看上述两个例子使用<code>volatile</code>后的改变。</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-asm" data-lang="asm"><span style="display:flex;"><span><span style="color:#888"># Example 1
+</span></span></span><span style="display:flex;"><span><span style="color:#888"># volatile int Value;
+</span></span></span><span style="display:flex;"><span><span style="color:#888"># volatile int IsPublished = 0;
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span> 
+</span></span><span style="display:flex;"><span><span style="color:#888"># void sendValue(int x)
+</span></span></span><span style="display:flex;"><span><span style="color:#888"># {
+</span></span></span><span style="display:flex;"><span><span style="color:#888">#     Value = x + 2;
+</span></span></span><span style="display:flex;"><span><span style="color:#888">#     IsPublished = 1 ;
+</span></span></span><span style="display:flex;"><span><span style="color:#888"># } 
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span><span style="color:#06b;font-weight:bold">endValue</span>(<span style="color:#036;font-weight:bold">int</span>):
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">add</span>     <span style="color:#036;font-weight:bold">edi</span>, <span style="color:#00d;font-weight:bold">2</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">mov</span>     <span style="color:#036;font-weight:bold">DWORD</span> <span style="color:#036;font-weight:bold">PTR</span> <span style="color:#036;font-weight:bold">Value</span>[<span style="color:#036;font-weight:bold">rip</span>], <span style="color:#036;font-weight:bold">edi</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">mov</span>     <span style="color:#036;font-weight:bold">DWORD</span> <span style="color:#036;font-weight:bold">PTR</span> <span style="color:#036;font-weight:bold">IsPublished</span>[<span style="color:#036;font-weight:bold">rip</span>], <span style="color:#00d;font-weight:bold">1</span>
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span><span style="color:#888"># Example 2
+</span></span></span><span style="display:flex;"><span><span style="color:#888"># volatile int value = 90;
+</span></span></span><span style="display:flex;"><span><span style="color:#888"># void foo() {
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>
+</span></span><span style="display:flex;"><span><span style="color:#888">#     value = 100;
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span> 
+</span></span><span style="display:flex;"><span><span style="color:#888">#     while(value == 100)
+</span></span></span><span style="display:flex;"><span><span style="color:#888">#     {
+</span></span></span><span style="display:flex;"><span><span style="color:#888">#         // do something
+</span></span></span><span style="display:flex;"><span><span style="color:#888">#     }
+</span></span></span><span style="display:flex;"><span><span style="color:#888">#     // exit loop
+</span></span></span><span style="display:flex;"><span><span style="color:#888"># }
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>
+</span></span><span style="display:flex;"><span><span style="color:#888"># void end() {
+</span></span></span><span style="display:flex;"><span><span style="color:#888">#     value = 99;
+</span></span></span><span style="display:flex;"><span><span style="color:#888"># }
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>
+</span></span><span style="display:flex;"><span><span style="color:#06b;font-weight:bold">foo</span>():
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">mov</span>     <span style="color:#036;font-weight:bold">DWORD</span> <span style="color:#036;font-weight:bold">PTR</span> <span style="color:#036;font-weight:bold">value</span>[<span style="color:#036;font-weight:bold">rip</span>], <span style="color:#00d;font-weight:bold">100</span>
+</span></span><span style="display:flex;"><span><span style="color:#970;font-weight:bold">.L21:</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">mov</span>     <span style="color:#036;font-weight:bold">eax</span>, <span style="color:#036;font-weight:bold">DWORD</span> <span style="color:#036;font-weight:bold">PTR</span> <span style="color:#036;font-weight:bold">value</span>[<span style="color:#036;font-weight:bold">rip</span>]
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">cmp</span>     <span style="color:#036;font-weight:bold">eax</span>, <span style="color:#00d;font-weight:bold">100</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">je</span>      <span style="color:#036;font-weight:bold">.L21</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">ret</span>
+</span></span><span style="display:flex;"><span><span style="color:#06b;font-weight:bold">end</span>():
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">mov</span>     <span style="color:#036;font-weight:bold">DWORD</span> <span style="color:#036;font-weight:bold">PTR</span> <span style="color:#036;font-weight:bold">value</span>[<span style="color:#036;font-weight:bold">rip</span>], <span style="color:#00d;font-weight:bold">99</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#06b;font-weight:bold">ret</span>
+</span></span></code></pre></div><p>第一个例子可以看到，因为声明为<code>volatile</code>，编译器不会再将其重排序了，这里之所以要将两个变量都声明为<code>volatile</code>是因为，<strong>volatile</strong> 和 <strong>非volatile</strong>变量是可以重排序的，只有都为<code>volatile</code>才不会重排序。而第二个例子中，可以看到编译器保证对<code>value</code>的读取都会从内存读取，并且不会对含有<code>volatile</code>的变量进行优化。</p>
+<h3 id="cpu乱序执行">CPU乱序执行</h3>
+<p>这里我们仍旧使用第一个例子，不同的是我们加上<code>compiler barrier</code>的约束</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c++" data-lang="c++"><span style="display:flex;"><span><span style="color:#339;font-weight:bold">int</span> Value <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">0</span>;
+</span></span><span style="display:flex;"><span><span style="color:#339;font-weight:bold">int</span> IsPublished <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">0</span>;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#339;font-weight:bold">void</span> <span style="color:#06b;font-weight:bold">sendValue</span>(<span style="color:#339;font-weight:bold">int</span> x)
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>    Value <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">1</span> <span style="color:#333">+</span> x;
+</span></span><span style="display:flex;"><span>    <span style="color:#080;font-weight:bold">asm</span> <span style="color:#080;font-weight:bold">volatile</span>(<span style="background-color:#fff0f0">&#34;&#34;</span> <span style="color:#333">:::</span> <span style="background-color:#fff0f0">&#34;memory&#34;</span>);
+</span></span><span style="display:flex;"><span>    IsPublished <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">1</span> ;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>尽管我们在这里添加了<code>compiler barrier</code>，但是实际运行时，仍然可能出现在读到 <code>IsPublished = 1</code>后，<code>Value</code>的值为0的情况。这是因为CPU也可以乱序执行你所写的指令，只要符合<code>as-if法则</code>.因此可能在实际执行时，CPU先执行<code>IsPublished = 1 </code>后执行<code>Value = 1 + x</code></p>
+<h4 id="如何解决-1"><strong>如何解决</strong></h4>
+<p>如果想要强制要求CPU按某种顺序执行指令，我们需要在代码中插入<code>memory barrier</code>, 这里仅介绍x86架构下的<code>memory barrier</code>,一共有三种<code>memory barrier</code></p>
+<ol>
+<li>mfence</li>
+</ol>
+<blockquote>
+<p>Performs a serializing operation on all load-from-memory and store-to-memory instructions that were issued prior the MFENCE instruction. This serializing operation guarantees that every load and store instruction that precedes in program order the MFENCE instruction is globally visible before any load or store instruction that follows the MFENCE instruction is globally visible</p>
+</blockquote>
+<ol start="2">
+<li>lfence</li>
+</ol>
+<blockquote>
+<p>Performs a serializing operation on all load-from-memory instructions that were issued prior the LFENCE instruction. This serializing operation guarantees that every load instruction that precedes in program order the LFENCE instruction is globally visible before any load instruction that follows the LFENCE instruction is globally visible</p>
+</blockquote>
+<ol start="3">
+<li>sfence</li>
+</ol>
+<blockquote>
+<p>Performs a serializing operation on all store-to-memory instructions that were issued prior the SFENCE instruction. This serializing operation guarantees that every store instruction that precedes in program order the SFENCE instruction is globally visible before any store instruction that follows the SFENCE instruction is globally visible.</p>
+</blockquote>
+<p><strong>mfence</strong>，所有在mfence前的<strong>读写</strong>指令，都会被<strong>mfence</strong>后的<strong>读写</strong>指令感知到(可见),这么说可能比较抽象,我们看下面的图。</p>
+<p><figure>
+  <img src="/pic/C&#43;&#43;/mfence.png" alt="image-20230622222630329"  />
+</figure></p>
+<p>为了满足该正式定义其实很简单。</p>
+<ol>
+<li>在mfence之前的读写代码，<strong>可以</strong>乱序执行。</li>
+<li>在mfence之后的读写代码，<strong>可以</strong>乱序执行。</li>
+<li>乱序执行的读写代码<strong>不可以</strong>跨过mfence指令。</li>
+</ol>
+<p>只要满足上述四点就可以满足<code>mfence</code>定义，这里不做证明，有兴趣的可以自己尝试着证明一下。</p>
+<p><strong>lfence</strong>，所有在lfence前的<strong>读</strong>指令，都会被<strong>lfence</strong>后的<strong>读</strong>指令感知到(可见),这么说可能比较抽象,我们看下面的图。</p>
+<p><figure>
+  <img src="/pic/C&#43;&#43;/lfence.png" alt="image-20230622222630329"  />
+</figure></p>
+<p>为了满足该正式定义。</p>
+<ol>
+<li>在lfence之前的读写代码，<strong>可以</strong>乱序执行。</li>
+<li>在lfence之后的读写代码，<strong>可以</strong>乱序执行。</li>
+<li>乱序执行的<strong>读读</strong>代码<strong>不可以</strong>跨过lfence指令，乱序执行的读写，写读，写写代码可以跨过lfence指令。</li>
+</ol>
+<p><strong>sfence</strong>，所有在sfence前的<strong>写</strong>指令，都会被<strong>sfence</strong>后的<strong>写</strong>指令感知到(可见),这么说可能比较抽象,我们看下面的图。</p>
+<p><figure>
+  <img src="/pic/C&#43;&#43;/sfence.png" alt="image-20230622222630329"  />
+</figure></p>
+<p>为了满足该正式定义。</p>
+<ol>
+<li>在sfence之前的读写代码，<strong>可以</strong>乱序执行。</li>
+<li>在sfence之后的读写代码，<strong>可以</strong>乱序执行。</li>
+<li>乱序执行的<strong>写写</strong>代码<strong>不可以</strong>跨过sfence指令，乱序执行的读写，写读，读读代码可以跨过sfence指令。</li>
+</ol>
+<h2 id="c的内存模型">C++的内存模型</h2>
+<p>我们按照难易度开始介绍C++的内存模型</p>
+<h3 id="relaxed">RELAXED</h3>
+<p>这个内存模型是最宽松的内存模型（性能最好），也就是约束最小的，简单来说，它只保证原子操作，不会对CPU的乱序执行进行任何保证（编译乱序，乱序执行，只要有一个不保证，就是全不保证）。因此它适合计数功能，比如<code>shared_ptr</code>的引用计数(在析构时不适用).</p>
+<p>一般使用的方式为</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span>atomic<span style="color:#333">&lt;</span><span style="color:#339;font-weight:bold">int</span><span style="color:#333">&gt;</span> ref;
+</span></span><span style="display:flex;"><span>ref.store(<span style="color:#00d;font-weight:bold">1</span>, memory_order_relaxed);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>atomic_thread_fence(memory_order_relaxed); <span style="color:#888">// 这个语句没有任何用处
+</span></span></span></code></pre></div><h3 id="sequentially-consistent">SEQUENTIALLY-CONSISTENT</h3>
+<p>这个内存模型是最严格的内存模型（性能最差）</p>
+<h4 id="atomic-operation">Atomic operation</h4>
+<p>作为原子操作时，该模型除了保证原子操作外，它同时保证我们可以将各个线程的原子操作拿出来，然后确定一个执行顺序(即先执行线程A，再线程B，再线程A)。而这个顺序是全局确定的，即每一个线程看到的都是这个顺序。简单来说就是</p>
+<ol>
+<li>代码实际执行时按照你写的顺序执行</li>
+<li>对内存修改读取的顺序，所有线程唯一。</li>
+</ol>
+<p>这也是最符合直觉的内存模型。</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span>std<span style="color:#333">::</span>atomic<span style="color:#333">&lt;</span><span style="color:#339;font-weight:bold">bool</span><span style="color:#333">&gt;</span> x,y;
+</span></span><span style="display:flex;"><span>std<span style="color:#333">::</span>atomic<span style="color:#333">&lt;</span><span style="color:#339;font-weight:bold">int</span><span style="color:#333">&gt;</span> z;
+</span></span><span style="display:flex;"><span><span style="color:#339;font-weight:bold">void</span> <span style="color:#06b;font-weight:bold">write_x</span>()
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>   x.store(<span style="color:#007020">true</span>,std<span style="color:#333">::</span>memory_order_seq_cst);     <span style="color:#888">// A
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>}
+</span></span><span style="display:flex;"><span><span style="color:#339;font-weight:bold">void</span> <span style="color:#06b;font-weight:bold">write_y</span>()
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>    y.store(<span style="color:#007020">true</span>,std<span style="color:#333">::</span>memory_order_seq_cst);   <span style="color:#888">// B
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>}
+</span></span><span style="display:flex;"><span><span style="color:#339;font-weight:bold">void</span> <span style="color:#06b;font-weight:bold">read_x_then_y</span>()
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>    <span style="color:#080;font-weight:bold">while</span>(<span style="color:#333">!</span>x.load(std<span style="color:#333">::</span>memory_order_seq_cst));   <span style="color:#888">// C
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>    <span style="color:#080;font-weight:bold">if</span>(y.load(std<span style="color:#333">::</span>memory_order_seq_cst))		<span style="color:#888">// E
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>        <span style="color:#333">++</span>z;
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span><span style="color:#339;font-weight:bold">void</span> <span style="color:#06b;font-weight:bold">read_y_then_x</span>()
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>    <span style="color:#080;font-weight:bold">while</span>(<span style="color:#333">!</span>y.load(std<span style="color:#333">::</span>memory_order_seq_cst));  <span style="color:#888">// D
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>    <span style="color:#080;font-weight:bold">if</span>(x.load(std<span style="color:#333">::</span>memory_order_seq_cst))       <span style="color:#888">// F
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>        <span style="color:#333">++</span>z;
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span><span style="color:#339;font-weight:bold">int</span> <span style="color:#06b;font-weight:bold">main</span>()
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>    x<span style="color:#333">=</span><span style="color:#007020">false</span>;
+</span></span><span style="display:flex;"><span>    y<span style="color:#333">=</span><span style="color:#007020">false</span>;
+</span></span><span style="display:flex;"><span>    z<span style="color:#333">=</span><span style="color:#00d;font-weight:bold">0</span>;
+</span></span><span style="display:flex;"><span>    std<span style="color:#333">::</span><span style="color:#080;font-weight:bold">thread</span> a(write_x);
+</span></span><span style="display:flex;"><span>    std<span style="color:#333">::</span><span style="color:#080;font-weight:bold">thread</span> b(write_y);
+</span></span><span style="display:flex;"><span>    std<span style="color:#333">::</span><span style="color:#080;font-weight:bold">thread</span> c(read_x_then_y);
+</span></span><span style="display:flex;"><span>    std<span style="color:#333">::</span><span style="color:#080;font-weight:bold">thread</span> d(read_y_then_x);
+</span></span><span style="display:flex;"><span>    a.join();
+</span></span><span style="display:flex;"><span>    b.join();
+</span></span><span style="display:flex;"><span>    c.join();
+</span></span><span style="display:flex;"><span>    d.join();
+</span></span><span style="display:flex;"><span>    assert(z.load()<span style="color:#333">!=</span><span style="color:#00d;font-weight:bold">0</span>); <span style="color:#888">// always true!
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>}
+</span></span></code></pre></div><p>从这个代码中我们可以得知</p>
+<ol>
+<li>当C发生时,A一定已经发生</li>
+<li>当D发生时,B一定已经发生</li>
+<li>当E发生时,C, A一定已经发生</li>
+<li>当F发生时,D, B一定已经发生</li>
+</ol>
+<p>因此若E,F都为false,说明A,B都未发生但C,D都已经发生.这与1,2矛盾.因此<code>assert</code>一定为true.</p>
+<h4 id="fence">Fence</h4>
+<p>当<code>std::memory_order_seq_cst</code>用于<code>std::atomic_thread_fence</code>等价于代码中插入<code>mfence</code>,对于<code>mfence</code>的定义可以看前面的描述.</p>
+<h3 id="acquire_release">ACQUIRE_RELEASE</h3>
+<p>这个内存模型的严格性居中（性能居中）</p>
+<h4 id="atomic-operation-1">Atomic operation</h4>
+<p>这个模型没法再取得全局唯一的执行顺序了(即有可能线程A看到线程C的执行顺序是ABCD,但是线程B看到线程C的执行顺序为BDAC).
+它只能通过<code>acquire</code>和<code>release</code>来进行同步线程.</p>
+<p>那么<code>acqurie</code>与<code>release</code>分别代表了什么样的语义呢?
+<figure>
+  <img src="/pic/C&#43;&#43;/acquire-release.png" alt="image-20230622222630329"  />
+</figure></p>
+<p>从图中可以看到如果<code>acquire</code>不允许后面的指令重排序越过该语句,而<code>release</code>不允许前面的指令重排序越过该语句,因此他们两个一对很好的构成了临界区.是的,我们可以把<code>acquire</code>看作<code>lock</code>,把<code>release</code>看作<code>unlock</code>.
+<figure>
+  <img src="/pic/C&#43;&#43;/section.png" alt="image-20230622222630329"  />
+</figure></p>
+<p>那么这两个怎么对线程取得同步呢?很简单,如果<code>acquire</code>获得了<code>release</code>存储的值,那么这两个线程就取得了同步.<code>release</code>之前的所有内存操作都会被<code>acquire</code>感知到.</p>
+<p>现在我们看下面的例子.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span>std<span style="color:#333">::</span>atomic<span style="color:#333">&lt;</span><span style="color:#339;font-weight:bold">bool</span><span style="color:#333">&gt;</span> x,y;
+</span></span><span style="display:flex;"><span>std<span style="color:#333">::</span>atomic<span style="color:#333">&lt;</span><span style="color:#339;font-weight:bold">int</span><span style="color:#333">&gt;</span> z;
+</span></span><span style="display:flex;"><span><span style="color:#339;font-weight:bold">void</span> <span style="color:#06b;font-weight:bold">write_x</span>()
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>   x.store(<span style="color:#007020">true</span>,std<span style="color:#333">::</span>memory_order_release);     <span style="color:#888">// A
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>}
+</span></span><span style="display:flex;"><span><span style="color:#339;font-weight:bold">void</span> <span style="color:#06b;font-weight:bold">write_y</span>()
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>    y.store(<span style="color:#007020">true</span>,std<span style="color:#333">::</span>memory_order_release);   <span style="color:#888">// B
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>}
+</span></span><span style="display:flex;"><span><span style="color:#339;font-weight:bold">void</span> <span style="color:#06b;font-weight:bold">read_x_then_y</span>()
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>    <span style="color:#080;font-weight:bold">while</span>(<span style="color:#333">!</span>x.load(std<span style="color:#333">::</span>memory_order_acquire));   <span style="color:#888">// C
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>    <span style="color:#080;font-weight:bold">if</span>(y.load(std<span style="color:#333">::</span>memory_order_acquire))		<span style="color:#888">// E
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>        <span style="color:#333">++</span>z;
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span><span style="color:#339;font-weight:bold">void</span> <span style="color:#06b;font-weight:bold">read_y_then_x</span>()
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>    <span style="color:#080;font-weight:bold">while</span>(<span style="color:#333">!</span>y.load(std<span style="color:#333">::</span>memory_order_acquire));  <span style="color:#888">// D
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>    <span style="color:#080;font-weight:bold">if</span>(x.load(std<span style="color:#333">::</span>memory_order_acquire))       <span style="color:#888">// F
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>        <span style="color:#333">++</span>z;
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span><span style="color:#339;font-weight:bold">int</span> <span style="color:#06b;font-weight:bold">main</span>()
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>    x<span style="color:#333">=</span><span style="color:#007020">false</span>;
+</span></span><span style="display:flex;"><span>    y<span style="color:#333">=</span><span style="color:#007020">false</span>;
+</span></span><span style="display:flex;"><span>    z<span style="color:#333">=</span><span style="color:#00d;font-weight:bold">0</span>;
+</span></span><span style="display:flex;"><span>    std<span style="color:#333">::</span><span style="color:#080;font-weight:bold">thread</span> a(write_x);
+</span></span><span style="display:flex;"><span>    std<span style="color:#333">::</span><span style="color:#080;font-weight:bold">thread</span> b(write_y);
+</span></span><span style="display:flex;"><span>    std<span style="color:#333">::</span><span style="color:#080;font-weight:bold">thread</span> c(read_x_then_y);
+</span></span><span style="display:flex;"><span>    std<span style="color:#333">::</span><span style="color:#080;font-weight:bold">thread</span> d(read_y_then_x);
+</span></span><span style="display:flex;"><span>    a.join();
+</span></span><span style="display:flex;"><span>    b.join();
+</span></span><span style="display:flex;"><span>    c.join();
+</span></span><span style="display:flex;"><span>    d.join();
+</span></span><span style="display:flex;"><span>    assert(z.load()<span style="color:#333">!=</span><span style="color:#00d;font-weight:bold">0</span>); <span style="color:#888">// maybe failed!
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>}
+</span></span></code></pre></div><p>从这个代码中我们可以知道在<code>SEQUENTIALLY-CONSISTENT</code>的情况下,assert一定为true,但是在<code>acquire-release</code>中,这个assert可能失败.</p>
+<p>尽管A和C同步,B和D同步. 但是E和B, F和A并不同步,他们仍然可能读到的是false.从而导致assert失败.(因为读到了线程本地的cache)</p>
+<h4 id="fence-1">Fence</h4>
+<p>当<code>std::memory_order_acquire</code>用于<code>std::atomic_thread_fence</code>等价于禁止LOAD，STORE重排序到这条语句前，同时禁止LOAD语句重排序到这条语句后。</p>
+<p>当<code>std::memory_order_acquire</code>用于<code>std::atomic_thread_fence</code>等价于禁止LOAD，STORE重排序到这条语句后，同时禁止STORE语句重排序到这条语句前。</p>
+<h3 id="overview">Overview</h3>
+<p>因为对于CPU的MESI协议等的理解还不够,因此这篇文章写的还比较浅显,等后面完全弄懂了CPU的缓存一致性协议再继续完成.</p>
+
+</div>
+<div class="tags">
+<div class="taxosfloating_left">
+<p>Categories</p>
+</div>
+<div class="termsfloating_right">
+<p>
+<a href="/categories/c&#43;&#43;/">c&#43;&#43;</a>
+<a href="/categories/concurrency/">concurrency</a>
+</p>
+</div>
+<div class="clearit"></div>
+</div>
+<div id="disqus_thread"></div>
+<script type="text/javascript">
+(function() {
+
+
+if (window.location.hostname == "localhost")
+  return;
+var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+var disqus_shortname = 'tangdh-life';
+dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+(document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to load the comments.</noscript>
+
+
+</article>
+</div>
+</main><script src="/js/dark-mode.js"></script>
+
+</body>
+</html>

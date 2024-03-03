@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><script src="/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=livereload" data-no-instant defer></script>
+<meta charset="UTF-8">
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-D5M6G40M25"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-D5M6G40M25');
+</script>
+<meta name="baidu-site-verification" content="codeva-vs6hGikUak" />
+<title>DuckDB -- 浮点数的压缩 | Don&#39;t Panic</title>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="generator" content="Hugo 0.123.7">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="DuckDB 是一款开源 OLAP 数据库。与 SQLite 类似，本文将介绍DuckDB是如何对它的浮点数数组进行压缩">
+<link rel="stylesheet" type="text/css" media="screen" href="/css/normalize.css" />
+<link rel="stylesheet" type="text/css" media="screen" href="/css/main.css" />
+<link rel="stylesheet" type="text/css" media="screen" href="/css/all.css" /><link rel="stylesheet" href="/css/katex.css" crossorigin="anonymous">
+<script defer src="/js/katex.js"  integrity="sha384-PFWG8XW41D5NzhNv5FegM1CUkw9nNLdWug8DuwnUoNEVop9n5frjcnbtsZtxTNjw" crossorigin="anonymous"></script>
+<script defer src="/js/auto-render.js" integrity="sha384-EN2q+JG5/3Z8gD7hT5WZqq+W+9wQR4P3IezfuZmGG5RkNXaaaks85seDJO7WkZlY" crossorigin="anonymous" onload="renderMathInElement(document.body);"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() { renderMathInElement(document.body, { delimiters: [ {left: "$$", right: "$$", display: true}, {left: "$", right: "$", display: false} ] }); });
+</script>
+
+
+
+
+<meta property="og:title" content="DuckDB -- 浮点数的压缩" />
+<meta property="og:description" content="DuckDB 是一款开源 OLAP 数据库。与 SQLite 类似，本文将介绍DuckDB是如何对它的浮点数数组进行压缩" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="http://localhost:1313/posts/database/duckdb-alp/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-03-03T00:00:00+00:00" />
+<meta property="article:modified_time" content="2024-03-03T00:00:00+00:00" />
+
+<meta name="twitter:card" content="summary"/><meta name="twitter:title" content="DuckDB -- 浮点数的压缩"/>
+<meta name="twitter:description" content="DuckDB 是一款开源 OLAP 数据库。与 SQLite 类似，本文将介绍DuckDB是如何对它的浮点数数组进行压缩"/>
+
+<meta itemprop="name" content="DuckDB -- 浮点数的压缩">
+<meta itemprop="description" content="DuckDB 是一款开源 OLAP 数据库。与 SQLite 类似，本文将介绍DuckDB是如何对它的浮点数数组进行压缩"><meta itemprop="datePublished" content="2024-03-03T00:00:00+00:00" />
+<meta itemprop="dateModified" content="2024-03-03T00:00:00+00:00" />
+<meta itemprop="wordCount" content="32">
+<meta itemprop="keywords" content="" />
+</head>
+<body>
+<header>
+<div id="avatar">
+<a href="http://localhost:1313/"><img src="/avatar.jpeg" alt="Don&#39;t Panic"></a>
+</div>
+<div id="titletext">
+<h2 id="titleonly"><a href="http://localhost:1313/">Don&#39;t Panic</a></h2>
+</div>
+<div id="title-social">
+<div id="social">
+<nav><ul>
+<li><a href="https://github.com/tang-hi"><i title="Github" class="icons fab fa-github"></i></a></li>
+<li><a href="mailto:tangdhcs@gmail.com"><i title="Email" class="icons fas fa-envelope"></i></a></li>
+<li><a href="https://twitter.com/TangDh"><i title="Twitter" class="icons fab fa-twitter"></i></a></li>
+<li><a href="/index.xml"><i title="RSS" class="icons fas fa-rss"></i></a></li>
+<li><a><i title="Switch Dark Mode" class="dark-mode icons fas fa-moon"></i></a></li>
+</ul></nav>
+</div>
+</div>
+<div id="mainmenu">
+<nav>
+<ul>
+<li><a href="/">Home</a></li>
+<li><a href="/posts">All Posts</a></li>
+<li><a href="/about">About</a></li>
+<li><a href="/categories">Categories</a></li>
+</ul>
+</nav>
+</div>
+</header>
+<main>
+<div class="post">
+<article>
+<div class="post-header">
+<div class="meta">
+<div class="date">
+<span class="day">03</span>
+<span class="rest">Mar 2024</span>
+</div>
+</div>
+<div class="matter">
+<h1 class="title">DuckDB -- 浮点数的压缩</h1>
+<p class="post-meta">
+<span class="post-meta">
+
+&nbsp;<i class="fas fa-clock"></i>&nbsp;1&nbsp;minutes
+
+
+ 
+&nbsp;| &nbsp;
+
+<i class="fas fa-book"></i>&nbsp;32&nbsp;words
+
+
+
+
+</span>
+
+</p>
+</div>
+</div>
+<div class="markdown">
+<p>浮点数的压缩一直是一个难以解决的问题。因为其在计算机中存储格式的特殊，导致浮点数的压缩率和解压速度都不是那么令人满意。
+DuckDB采用了论文 <a href="https://dl.acm.org/doi/pdf/10.1145/3626717" target="_blank">ALP</a> 中所提出的方法来对浮点数进行压缩，各方面都取得了不错的进展，这篇博客将介绍ALP中的压缩方法。</p>
+<div style="text-align: center">
+<img src="/pic/duckdb/alp-compare.png"/>
+</div>
+<h2 id="前置知识">前置知识</h2>
+<h3 id="ieee-754-double-的表示方法">IEEE 754 Double 的表示方法</h3>
+<p>首先我们来回忆一下浮点数在计算机内部的表示方式。浮点数由三部分组成</p>
+<ol>
+<li>
+<p>符号位 (sign)</p>
+</li>
+<li>
+<p>指数位 (exponent)</p>
+</li>
+<li>
+<p>分数位 (fraction)</p>
+</li>
+</ol>
+<div style="text-align: center">
+<img src="/pic/duckdb/double-represent.png"/>
+</div>
+我们通过这三部分可以得到浮点数的值为
+$$
+double = (-1)^{\\sign} \times 2^{(exp-1023)} \times \left(1 + \sum_{i=1}^{52}\left({b_{52-i}} {2^{-i}}\right)\right)
+$$
+<h2 id="压缩">压缩</h2>
+<h3 id="alp">ALP</h3>
+<h3 id="alprd">ALPRD</h3>
+
+</div>
+<div class="tags">
+<div class="taxosfloating_left">
+<p>Categories</p>
+</div>
+<div class="termsfloating_right">
+<p>
+<a href="/categories/alp/">alp</a>
+<a href="/categories/compression/">compression</a>
+<a href="/categories/database/">database</a>
+<a href="/categories/duckdb/">duckdb</a>
+</p>
+</div>
+<div class="clearit"></div>
+</div>
+<div id="disqus_thread"></div>
+<script type="text/javascript">
+(function() {
+
+
+if (window.location.hostname == "localhost")
+  return;
+var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+var disqus_shortname = 'tangdh-life';
+dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+(document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to load the comments.</noscript>
+
+
+</article>
+</div>
+</main><script src="/js/dark-mode.js"></script>
+
+</body>
+</html>

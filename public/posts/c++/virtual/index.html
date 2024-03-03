@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><script src="/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=livereload" data-no-instant defer></script>
+<meta charset="UTF-8">
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-D5M6G40M25"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-D5M6G40M25');
+</script>
+<meta name="baidu-site-verification" content="codeva-vs6hGikUak" />
+<title>Virtual 机制 | Don&#39;t Panic</title>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="generator" content="Hugo 0.123.7">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="这篇文章尝试使用较底层的视角来审视C&#43;&#43;中虚函数是如何实现的">
+<link rel="stylesheet" type="text/css" media="screen" href="/css/normalize.css" />
+<link rel="stylesheet" type="text/css" media="screen" href="/css/main.css" />
+<link rel="stylesheet" type="text/css" media="screen" href="/css/all.css" /><link rel="stylesheet" href="/css/katex.css" crossorigin="anonymous">
+<script defer src="/js/katex.js"  integrity="sha384-PFWG8XW41D5NzhNv5FegM1CUkw9nNLdWug8DuwnUoNEVop9n5frjcnbtsZtxTNjw" crossorigin="anonymous"></script>
+<script defer src="/js/auto-render.js" integrity="sha384-EN2q+JG5/3Z8gD7hT5WZqq+W+9wQR4P3IezfuZmGG5RkNXaaaks85seDJO7WkZlY" crossorigin="anonymous" onload="renderMathInElement(document.body);"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() { renderMathInElement(document.body, { delimiters: [ {left: "$$", right: "$$", display: true}, {left: "$", right: "$", display: false} ] }); });
+</script>
+
+
+
+
+<meta property="og:title" content="Virtual 机制" />
+<meta property="og:description" content="这篇文章尝试使用较底层的视角来审视C&#43;&#43;中虚函数是如何实现的" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="http://localhost:1313/posts/c&#43;&#43;/virtual/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-02-18T00:00:00+00:00" />
+<meta property="article:modified_time" content="2023-02-18T00:00:00+00:00" />
+
+<meta name="twitter:card" content="summary"/><meta name="twitter:title" content="Virtual 机制"/>
+<meta name="twitter:description" content="这篇文章尝试使用较底层的视角来审视C&#43;&#43;中虚函数是如何实现的"/>
+
+<meta itemprop="name" content="Virtual 机制">
+<meta itemprop="description" content="这篇文章尝试使用较底层的视角来审视C&#43;&#43;中虚函数是如何实现的"><meta itemprop="datePublished" content="2023-02-18T00:00:00+00:00" />
+<meta itemprop="dateModified" content="2023-02-18T00:00:00+00:00" />
+<meta itemprop="wordCount" content="131">
+<meta itemprop="keywords" content="" />
+</head>
+<body>
+<header>
+<div id="avatar">
+<a href="http://localhost:1313/"><img src="/avatar.jpeg" alt="Don&#39;t Panic"></a>
+</div>
+<div id="titletext">
+<h2 id="titleonly"><a href="http://localhost:1313/">Don&#39;t Panic</a></h2>
+</div>
+<div id="title-social">
+<div id="social">
+<nav><ul>
+<li><a href="https://github.com/tang-hi"><i title="Github" class="icons fab fa-github"></i></a></li>
+<li><a href="mailto:tangdhcs@gmail.com"><i title="Email" class="icons fas fa-envelope"></i></a></li>
+<li><a href="https://twitter.com/TangDh"><i title="Twitter" class="icons fab fa-twitter"></i></a></li>
+<li><a href="/index.xml"><i title="RSS" class="icons fas fa-rss"></i></a></li>
+<li><a><i title="Switch Dark Mode" class="dark-mode icons fas fa-moon"></i></a></li>
+</ul></nav>
+</div>
+</div>
+<div id="mainmenu">
+<nav>
+<ul>
+<li><a href="/">Home</a></li>
+<li><a href="/posts">All Posts</a></li>
+<li><a href="/about">About</a></li>
+<li><a href="/categories">Categories</a></li>
+</ul>
+</nav>
+</div>
+</header>
+<main>
+<div class="post">
+<article>
+<div class="post-header">
+<div class="meta">
+<div class="date">
+<span class="day">18</span>
+<span class="rest">Feb 2023</span>
+</div>
+</div>
+<div class="matter">
+<h1 class="title">Virtual 机制</h1>
+<p class="post-meta">
+<span class="post-meta">
+
+&nbsp;<i class="fas fa-clock"></i>&nbsp;1&nbsp;minutes
+
+
+ 
+&nbsp;| &nbsp;
+
+<i class="fas fa-book"></i>&nbsp;131&nbsp;words
+
+
+
+
+</span>
+
+</p>
+</div>
+</div>
+<div class="markdown">
+<p>这篇文章会尝试使用<code>GDB</code>来分析C++中虚函数的实现机制。希望可以帮助你更加透彻的理解C++的虚函数实现。</p>
+<p>我们用来测试的程序</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span><span style="color:#579">#include</span> <span style="color:#579">&lt;iostream&gt;</span><span style="color:#579">
+</span></span></span><span style="display:flex;"><span><span style="color:#579"></span><span style="color:#080;font-weight:bold">using</span> <span style="color:#080;font-weight:bold">namespace</span> std;
+</span></span><span style="display:flex;"><span><span style="color:#080;font-weight:bold">struct</span> <span style="color:#b06;font-weight:bold">Simple</span> {
+</span></span><span style="display:flex;"><span>  <span style="color:#339;font-weight:bold">int</span> one;
+</span></span><span style="display:flex;"><span>};
+</span></span><span style="display:flex;"><span><span style="color:#080;font-weight:bold">struct</span> <span style="color:#b06;font-weight:bold">Base</span> {
+</span></span><span style="display:flex;"><span>  <span style="color:#080;font-weight:bold">virtual</span> <span style="color:#339;font-weight:bold">void</span> <span style="color:#06b;font-weight:bold">v1</span>() {
+</span></span><span style="display:flex;"><span>    cout <span style="color:#333">&lt;&lt;</span> <span style="background-color:#fff0f0">&#34;Base::V1&#34;</span> <span style="color:#333">&lt;&lt;</span> endl;
+</span></span><span style="display:flex;"><span>  }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  <span style="color:#080;font-weight:bold">virtual</span> <span style="color:#339;font-weight:bold">void</span> <span style="color:#06b;font-weight:bold">v2</span>() {
+</span></span><span style="display:flex;"><span>    cout <span style="color:#333">&lt;&lt;</span> <span style="background-color:#fff0f0">&#34;Base::V2&#34;</span> <span style="color:#333">&lt;&lt;</span> endl;
+</span></span><span style="display:flex;"><span>  }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  <span style="color:#339;font-weight:bold">int</span> one;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>};
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#080;font-weight:bold">struct</span> <span style="color:#b06;font-weight:bold">Derived</span> <span style="color:#333">:</span> Base {
+</span></span><span style="display:flex;"><span>  <span style="color:#339;font-weight:bold">void</span> <span style="color:#06b;font-weight:bold">v1</span>() <span style="color:#080;font-weight:bold">override</span> {
+</span></span><span style="display:flex;"><span>    cout <span style="color:#333">&lt;&lt;</span> <span style="background-color:#fff0f0">&#34;Derived::v1&#34;</span> <span style="color:#333">&lt;&lt;</span> endl;
+</span></span><span style="display:flex;"><span>  }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>};
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#339;font-weight:bold">int</span> <span style="color:#06b;font-weight:bold">main</span>() {
+</span></span><span style="display:flex;"><span>  Base<span style="color:#333">*</span> derived <span style="color:#333">=</span> <span style="color:#080;font-weight:bold">new</span> Derived();
+</span></span><span style="display:flex;"><span>  Base<span style="color:#333">*</span> derived1 <span style="color:#333">=</span> <span style="color:#080;font-weight:bold">new</span> Derived();
+</span></span><span style="display:flex;"><span>  Base<span style="color:#333">*</span> base <span style="color:#333">=</span> <span style="color:#080;font-weight:bold">new</span> Base();
+</span></span><span style="display:flex;"><span>  Base<span style="color:#333">*</span> base1 <span style="color:#333">=</span> <span style="color:#080;font-weight:bold">new</span> Base();
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  Simple<span style="color:#333">*</span> simple <span style="color:#333">=</span> <span style="color:#080;font-weight:bold">new</span> Simple();
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  derived<span style="color:#333">-&gt;</span>v1();
+</span></span><span style="display:flex;"><span>  derived<span style="color:#333">-&gt;</span>v2();
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>下面我们将代码进行编译后，然后使用gdb进行分析</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>g++ virtual.cc --std<span style="color:#333">=</span>c++11 -g
+</span></span><span style="display:flex;"><span>gdb a.out
+</span></span></code></pre></div><p>我们首先分别看一下<code>derived</code>,<code>derived1</code>,<code>base</code>,<code>base1</code>,<code>simple</code>中的内容</p>
+<p><figure>
+  <img src="/pic/C&#43;&#43;/virtual-add1.png" alt="image-20230622221528352"  />
+</figure></p>
+<p><figure>
+  <img src="/pic/C&#43;&#43;/virtual-add2.png" alt="image-20230622222630329"  />
+</figure></p>
+<table>
+<thead>
+<tr>
+<th>variable name</th>
+<th>address</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>derived</td>
+<td>0x55555556aeb0</td>
+</tr>
+<tr>
+<td>derived1</td>
+<td>0x55555556aed0</td>
+</tr>
+<tr>
+<td>base</td>
+<td>0x55555556aef0</td>
+</tr>
+<tr>
+<td>base1</td>
+<td>0x55555556af10</td>
+</tr>
+<tr>
+<td>simple</td>
+<td>0x55555556af30</td>
+</tr>
+</tbody>
+</table>
+<p>从这两张图，我们可以发现如下几件事</p>
+<ol>
+<li>当一个class有虚函数时，该class的对象中会有一个<code>vptr</code>.</li>
+<li>该<code>vptr</code>的大小为<strong>8byte</strong>(0x55555556aeb8 - 0x55555556aeb0)</li>
+<li>该<code>vptr</code>所指向的内容仅与class的类型有关，与对象<strong>无关</strong> (derived.vptr == derived.vptr1)</li>
+</ol>
+<p>我们下面以<strong>derived</strong>为例,看一下<code>vptr</code>所指向的内容。</p>
+<p><figure>
+  <img src="/pic/C&#43;&#43;/vtable.png" alt="image-20230622223541703"  />
+</figure></p>
+<p>我们可以看到<code>vptr</code>指向了一些东西，但具体是什么我们还不知道,但是我们可以发现这个地址的值<code>0x5555555553a6</code>（小端写法）好像是一个地址，那么我们可以查看一下这个地址指向的是什么。</p>
+<p><figure>
+  <img src="/pic/C&#43;&#43;/vtable-content.png" alt="image-20230622224641115"  />
+</figure></p>
+<p>结果很明显，这里面的值指向的是函数<code>Derived::v1</code>的定义,我们可以通过这个地址对该函数进行调用。我们再看一下其他的值。</p>
+<p><figure>
+  <img src="/pic/C&#43;&#43;/vtable-all.png" alt="image-20230622225025776"  />
+</figure></p>
+<p>所以结论很清楚，当你的class中含有虚函数时，编译器会为该类创建一个专属的<code>vtable</code>,<code>vtable</code>中存放着各个虚函数的实现，如果该类有自己的实现，那么指向的就是它自己的实现，否则指向父类的实现。然后当你创建一个类的对象时，编译器会将指向该<code>vtable</code>的指针给到对象的<code>vptr</code>中。</p>
+<p>我们最后再看一下，调用的过程。</p>
+<p><code>derived-&gt;v1();</code></p>
+<p><figure>
+  <img src="/pic/C&#43;&#43;/virtual-call1.png" alt="image-20230622230204986"  />
+</figure></p>
+<p><code> derived-&gt;v2();</code></p>
+<p><figure>
+  <img src="/pic/C&#43;&#43;/virtual-call2.png" alt="image-20230622230402086"  />
+</figure></p>
+<p>其中<code>rbp</code>为栈帧,其中<code>-0x38(%rbp)</code>为获取<code>derived</code>的地址，即<code>0x55555556aeb0</code>,也就是<code>vptr</code>的地址，随后通过<code>mov (%rax),%rax</code>得到<code>vtable</code>的地址并保存在<code>%rax</code>中，因为调用的函数不同，因此<code>derived-&gt;v2();</code>的汇编需要将<code>%rax + 8</code>得到对应的地址。然后通过<code>mov (%rax),%rdx</code>得到需要调用的函数地址，最后通过<code>call *%rdx</code>完成多态的函数调用。</p>
+<h2 id="总结">总结</h2>
+<p>当当一个class有虚函数时，编译器会为该class对象生成一个<code>vptr</code>，该<code>vptr</code>的大小为<strong>8byte</strong>,所指向的内容仅与class的类型有关，与对象<strong>无关</strong>,这里面的值指向的是函数<code>Derived::v1</code>的定义,我们可以通过这个地址对该函数进行调用。当实际调用时，编译器会根据你调用的函数不同，调整vtable所指的entry,最后根据<code>entry</code>项中的地址，完成函数调用。</p>
+
+</div>
+<div class="tags">
+<div class="taxosfloating_left">
+<p>Categories</p>
+</div>
+<div class="termsfloating_right">
+<p>
+<a href="/categories/c&#43;&#43;/">c&#43;&#43;</a>
+</p>
+</div>
+<div class="clearit"></div>
+</div>
+<div id="disqus_thread"></div>
+<script type="text/javascript">
+(function() {
+
+
+if (window.location.hostname == "localhost")
+  return;
+var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+var disqus_shortname = 'tangdh-life';
+dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+(document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to load the comments.</noscript>
+
+
+</article>
+</div>
+</main><script src="/js/dark-mode.js"></script>
+
+</body>
+</html>

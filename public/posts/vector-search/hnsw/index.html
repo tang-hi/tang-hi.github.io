@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><script src="/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=livereload" data-no-instant defer></script>
+<meta charset="UTF-8">
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-D5M6G40M25"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-D5M6G40M25');
+</script>
+<meta name="baidu-site-verification" content="codeva-vs6hGikUak" />
+<title>HNSW (Hierarchical Navigable Small World) | Don&#39;t Panic</title>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="generator" content="Hugo 0.123.7">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="HNSW是通过图的方式来解决向量搜索问题的算法，由Y.Malkov与D.Yashunin首次提出。">
+<link rel="stylesheet" type="text/css" media="screen" href="/css/normalize.css" />
+<link rel="stylesheet" type="text/css" media="screen" href="/css/main.css" />
+<link rel="stylesheet" type="text/css" media="screen" href="/css/all.css" /><link rel="stylesheet" href="/css/katex.css" crossorigin="anonymous">
+<script defer src="/js/katex.js"  integrity="sha384-PFWG8XW41D5NzhNv5FegM1CUkw9nNLdWug8DuwnUoNEVop9n5frjcnbtsZtxTNjw" crossorigin="anonymous"></script>
+<script defer src="/js/auto-render.js" integrity="sha384-EN2q+JG5/3Z8gD7hT5WZqq+W+9wQR4P3IezfuZmGG5RkNXaaaks85seDJO7WkZlY" crossorigin="anonymous" onload="renderMathInElement(document.body);"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() { renderMathInElement(document.body, { delimiters: [ {left: "$$", right: "$$", display: true}, {left: "$", right: "$", display: false} ] }); });
+</script>
+
+
+
+
+<meta property="og:title" content="HNSW (Hierarchical Navigable Small World)" />
+<meta property="og:description" content="HNSW是通过图的方式来解决向量搜索问题的算法，由Y.Malkov与D.Yashunin首次提出。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="http://localhost:1313/posts/vector-search/hnsw/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-03-25T00:00:00+00:00" />
+<meta property="article:modified_time" content="2023-03-25T00:00:00+00:00" />
+
+<meta name="twitter:card" content="summary"/><meta name="twitter:title" content="HNSW (Hierarchical Navigable Small World)"/>
+<meta name="twitter:description" content="HNSW是通过图的方式来解决向量搜索问题的算法，由Y.Malkov与D.Yashunin首次提出。"/>
+
+<meta itemprop="name" content="HNSW (Hierarchical Navigable Small World)">
+<meta itemprop="description" content="HNSW是通过图的方式来解决向量搜索问题的算法，由Y.Malkov与D.Yashunin首次提出。"><meta itemprop="datePublished" content="2023-03-25T00:00:00+00:00" />
+<meta itemprop="dateModified" content="2023-03-25T00:00:00+00:00" />
+<meta itemprop="wordCount" content="179">
+<meta itemprop="keywords" content="" />
+</head>
+<body>
+<header>
+<div id="avatar">
+<a href="http://localhost:1313/"><img src="/avatar.jpeg" alt="Don&#39;t Panic"></a>
+</div>
+<div id="titletext">
+<h2 id="titleonly"><a href="http://localhost:1313/">Don&#39;t Panic</a></h2>
+</div>
+<div id="title-social">
+<div id="social">
+<nav><ul>
+<li><a href="https://github.com/tang-hi"><i title="Github" class="icons fab fa-github"></i></a></li>
+<li><a href="mailto:tangdhcs@gmail.com"><i title="Email" class="icons fas fa-envelope"></i></a></li>
+<li><a href="https://twitter.com/TangDh"><i title="Twitter" class="icons fab fa-twitter"></i></a></li>
+<li><a href="/index.xml"><i title="RSS" class="icons fas fa-rss"></i></a></li>
+<li><a><i title="Switch Dark Mode" class="dark-mode icons fas fa-moon"></i></a></li>
+</ul></nav>
+</div>
+</div>
+<div id="mainmenu">
+<nav>
+<ul>
+<li><a href="/">Home</a></li>
+<li><a href="/posts">All Posts</a></li>
+<li><a href="/about">About</a></li>
+<li><a href="/categories">Categories</a></li>
+</ul>
+</nav>
+</div>
+</header>
+<main>
+<div class="post">
+<article>
+<div class="post-header">
+<div class="meta">
+<div class="date">
+<span class="day">25</span>
+<span class="rest">Mar 2023</span>
+</div>
+</div>
+<div class="matter">
+<h1 class="title">HNSW (Hierarchical Navigable Small World)</h1>
+<p class="post-meta">
+<span class="post-meta">
+
+&nbsp;<i class="fas fa-clock"></i>&nbsp;1&nbsp;minutes
+
+
+ 
+&nbsp;| &nbsp;
+
+<i class="fas fa-book"></i>&nbsp;179&nbsp;words
+
+
+
+
+</span>
+
+</p>
+</div>
+</div>
+<div class="markdown">
+<p>HNSW是通过图的方式来解决向量搜索问题的算法，由Y.Malkov与D.Yashunin在<a href="https://arxiv.org/pdf/1603.09320.pdf" target="_blank">论文</a>中首次提出。</p>
+<p>这一个Section安排如下</p>
+<ol>
+<li>图拥有什么样的性质可以有效的找到最近的K个向量</li>
+<li>NSW(Navigable Small World)</li>
+<li>HNSW(Hierarchical Navigable Small World)</li>
+</ol>
+<h3 id="1-图的性质">1. 图的性质</h3>
+<p>我们先直观的感受一下使用图的方式来表现向量空间。</p>
+<div style="text-align: center">
+<img src="/pic/raw_vector.png"/>
+</div>
+<p>图中的点代表向量，我们可以看到，如果两个向量的距离较近，那么在图中这两个点之间的距离也会更近。当我们想要通过图的方式来解决向量搜索时，我们会希望从任一点出发可以到达图中其他所有的点，即这个图是一张联通图。</p>
+<div style="text-align: center">
+<img src="/pic/compare_vec.png"/>
+</div>
+<p>但仅仅只是联通图，仍然无法做到快速有效的找到距离最近的K个向量。考虑如下的情况，A点与B点之间相隔较远，因此如果想要从A点到达B点需要途经许多点(代表着大量的计算)，同时我们可以看到点C与许多其他的点都有连接，因此如果我们从点C开始寻找距离查询向量最近的K个点，我们会计算大量无关的点(因为与点C相连的点，其中很多大概率是与结果无关的)。</p>
+<div style="text-align: center">
+<img src="/pic/two_conn.png"/>
+</div>
+<p>综上所述，为了可以高效而准确的找到距离查询向量最近的K个向量。我们希望构建的图有以下几个性质</p>
+<ol>
+<li>联通图(没有孤岛)</li>
+<li>距离较远的点,有边可以相连(long range edge)</li>
+<li>构建的图中边的数量不宜过多(大量的计算)</li>
+<li>距离相近的点，有边连接（保证召回率）
+其中3,4是召回率与计算量的tradeoff。</li>
+</ol>
+<h3 id="2-nsw">2. NSW</h3>
+<p>NSW通过有效且简单的算法构建出满足上述要求的图，下面分别从构建以及查询两个方面来介绍NSW算法。</p>
+<h4 id="1-构建">1. 构建</h4>
+<p>首先我们将通过随机的方式，将向量一个一个添加到图中，每一个新添加的点都会与当前图中距离该点最近的<strong>M</strong>个点相连。之所以通过<strong>M</strong>对相连的点的数量进行限制，是为了防止连接的边过多，从而影响查询效率。</p>
+<p>我们通过一个例子来描述构建的过程，假设我们将<strong>M</strong>设置为3，并且已经将待加入的向量随机打乱。</p>
+<p>首先，添加点A，因为当前图中没有其他任何的点，所以我们只需要添加A，而不用作任何其他的操作。后面我们继续添加点B，此时图中只有点A，点的个数小于3,因此我们可以直接将两者相连。</p>
+<div style="text-align: center">
+<img src="/pic/addB.png"/>
+</div>
+<p>类似的我们向图中加入点C，点D，我们会获得以下的图</p>
+<div style="text-align: center">
+<img src="/pic/addCD.png"/>
+</div>
+<p>随后我们继续添加点E，此时我们会找到当前图中距离点E最近的<strong>M</strong>个点，即A，B，C并将其相互连接。</p>
+<div style="text-align: center">
+<img src="/pic/addE.png"/>
+</div>
+<p>用相同的方式，我们继续添加点F，G，H，最终得到的图如下所示。</p>
+<p>我们逐个检查NSW图是否满足我们之前要求的性质</p>
+<ol>
+<li>联通图，显而易见这是一张联通图</li>
+<li>距离较远的点有边可以相连，我们可以发现因为随机添加，最开始认为距离较近的点，比如A，D，随着添加的点越来越多，A，D相连的这条边成为了一条long range边。</li>
+<li>构建的图中，边的数量不宜过多。这一条因为我们始终用<strong>M</strong>控制边的数量，所以也可以满足</li>
+<li>距离较近的点，有边连接。因为我们始终与距离最近的<strong>M</strong>条边相连，因此也满足了该要求。</li>
+</ol>
+<div style="text-align: center">
+<img src="/pic/addFH.png"/>
+</div>
+<p>因此，我们只需要随机添加向量，并且在随机添加的过程中，与当前最近的<strong>M</strong>个点相连，我们就可以构建出一幅可以高效的进行ANN查询的图。下面我们讨论搜索的过程。</p>
+<h4 id="2-搜索">2. 搜索</h4>
+<p>因为我们通过NSW构建出的图,具有良好的特性,因此我们只需要使用简单的贪心算法就可以获得较好的搜索结果。在给定了一个query point后</p>
+<ol>
+<li>
+<p>我们在图中随机的选择一个点作为出发点(entry point)</p>
+</li>
+<li>
+<p>我们计算每一个与该点相连的点，选出最近的一个点。</p>
+<p>a. 若该点即为entry point,搜索结束,返回entry point。</p>
+<p>b. 若该点不为entry point, 设置该点为entry point, 重复过程2</p>
+</li>
+</ol>
+<p>下图为搜索的示意图,我们可以看到因为有long range，这一高速通道的存在，我们可以快速搜索到结果。</p>
+<div style="text-align: center">
+<img src="/pic/nsw-search.png"/>
+</div>
+<h3 id="3hnsw">3.HNSW</h3>
+<p>尽管NSW已经可以很好的为我们解决ANN查询的问题，但其仍然有不足之处。</p>
+<ol>
+<li>搜索时，NSW无法区分long range与short range，从而无法先查询long range再查询short range。</li>
+<li>当数据的聚类效应特别明显时，即使我们乱序加入向量，cluster之间相互连接的边仍然十分稀疏，从而搜索结果容易陷入局部最优，同时效率也会比较低下。</li>
+</ol>
+<p>因此为了解决上述问题，HNSW作为NSW的改良版被提了出来。</p>
+<h4 id="1构建">1.构建</h4>
+<p>我们首先直观的感受HNSW图。我们可以看到hnsw相比于nsw多了层级的概念。我们从图中可以看到，level0中有全部的向量，随着层数的增加，向量的数量也相应的减少。</p>
+<div style="text-align: center">
+<img src="/pic/hnsw.png"/>
+</div>
+<p>HNSW并不要求我们乱序插入向量，当我们向HNSW添加新的向量时，我们首先会通过一个指数衰减的概率函数，得到这个向量所处的最大层级(如果最大层级计算出来是3,那么level3, level2,level1,level0中都含有这个向量)。</p>
+<p>这就意味着，绝大多数的向量所处的最高层级都是level0, 同样我们也可以认为高层级是低层级的草图（抽样），因此高层级中的向量之间大概率是long range连接，低层级中的向量则是short range连接。这样子做给我们带来的好处就是搜索时，我们可以先寻找long range的边，再寻找short range的边，即先粗查再精查。从而尽可能减少搜索的次数。</p>
+<p>当得到这个向量所处的最大层级后，我们便需要将其添加到图中。假设，新增的向量为<strong>V</strong>, 这个向量所处的最大层级为<strong>I</strong>,HNSW的最高层级为<strong>J</strong>。添加向量时因为需要从最高层级<strong>J</strong>，一直走到最低层级0,我们将添加时所处的层级设置为<strong>C</strong>。添加的过程可以分为3个阶段</p>
+<ol>
+<li><strong>J</strong> &gt;= <strong>C</strong> &gt; <strong>I</strong>
+这一阶段我们使用NSW的贪心算法，寻找距离最近的向量，随后在下一层级以这个点为搜索起点.</li>
+<li><strong>I</strong> &gt;= <strong>C</strong> &gt; 0
+在这一阶段，我们不仅要找距离最近的向量，我们还需要将<strong>V</strong>存放到这一级的图中。我们仍旧使用贪心算法寻找距离最近的向量，不同之处在于我们会维护一个动态的列表，保存距离<strong>V</strong>最近的<code>efCounstruction</code>个向量，<code>efConstruction</code>为可调节的参数。当我们在这一层搜索完成后，我们会将这一动态列表作为<code>Candidate</code>,并从中取出<code>M</code>个向量，与其连接。</li>
+<li><strong>I</strong> = 0
+这一阶段，我们采用和第二阶段一样的策略，不同的是在level0,向量<strong>V</strong>可以与最多<strong>2M</strong>个向量进行连接。</li>
+</ol>
+<p>下图为一个简单的示例，新增向量所处的最高层级为1。我们首先在level2中，寻找与其最近的点(黄色标示)，找到后，我们以这个点为起点在level1中寻找与其最近的<code>efCounstruction</code>个点，随后与其中的<strong>M</strong>个向量进行连接。最后当我们到达level0时，我们用上一层连接的<strong>M</strong>个向量作为起点寻找符合要求的<strong>2M</strong>个向量，并与其相连。</p>
+<div style="text-align: center">
+<img src="/pic/new-insert.png"/>
+</div>
+<p>当我们在某一层中(<strong>I</strong> &gt;= <strong>C</strong> &gt;= 0)找到距离<strong>V</strong>最近的<code>efConstruction</code>向量后，我们需要从中挑选出<strong>M</strong>个向量用以与<strong>V</strong>连接。
+一种简单的做法是直接从<code>efCounstruction</code>中挑选出最近的<strong>M</strong>个向量，但是这种做法当数据的聚类效果特别明显时，会导致不同cluster之间的连接十分稀疏，导致搜索陷入局部最优，并且查询效率降低。</p>
+<p>因此我们采用启发式的搜索方式，假定我们新增的向量为<strong>V</strong>，挑选出的<code>efConstruction</code>个向量为<strong>Candidate</strong>,当前我们已经选择出需要连接的向量为<strong>Result</strong>,启发式的算法为</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#080;font-weight:bold">while</span> <span style="color:#007020">len</span>(Candidate) <span style="color:#333">&gt;</span> <span style="color:#00d;font-weight:bold">0</span> <span style="color:#000;font-weight:bold">and</span> <span style="color:#007020">len</span>(Result) <span style="color:#333">&lt;</span> M:
+</span></span><span style="display:flex;"><span>    c <span style="color:#333">=</span> pop nearest element <span style="color:#080;font-weight:bold">from</span> <span style="color:#0e84b5;font-weight:bold">Candidate</span> to V
+</span></span><span style="display:flex;"><span>    <span style="color:#080;font-weight:bold">for</span> r <span style="color:#000;font-weight:bold">in</span> Result:
+</span></span><span style="display:flex;"><span>        lowest <span style="color:#333">=</span> <span style="color:#007020">min</span>(lowest, distance(r, c))
+</span></span><span style="display:flex;"><span>    <span style="color:#080;font-weight:bold">if</span> dis(c, V) <span style="color:#333">&lt;</span> lowest:
+</span></span><span style="display:flex;"><span>        Result <span style="color:#333">+=</span> c
+</span></span></code></pre></div><p>用一张图来描述这种情况,我们从C1,C2中决定哪个点应该作为下一个连接点时，我们会选择与<code>inserted</code>之间的距离相比与其他<code>result</code>更近的点，而不是距离<code>inserted</code>更近的点。
+按照论文中的说法，这可以帮助我们在高度聚类的数据中，取得更好的搜索效果以及效率。</p>
+<blockquote>
+<p>The heuristic enhances the diversity of a vertex’s neighborhood and leads to better search efficiency for the case of highly clustered data.</p>
+</blockquote>
+<div style="text-align: center">
+<img src="/pic/her.png"/>
+</div>
+<h4 id="2搜索">2.搜索</h4>
+<p>搜索的过程分为两个阶段</p>
+<ol>
+<li><strong>J</strong> &gt;= <strong>C</strong> &gt; 0
+这一阶段我们使用NSW的贪心算法，在这一层中寻找距离最近的向量，随后在下一层级以这个点为搜索起点继续搜索.</li>
+<li><strong>I</strong> = 0
+这一阶段，我们仍旧使用贪心的搜索策略，不同之处在于，我们会维护一个距离最近的<code>efSearch</code>个向量，并最终返回结果。</li>
+</ol>
+<div style="text-align: center">
+<img src="/pic/search.png"/>
+</div>
+<h4 id="3summary">3.Summary</h4>
+<p>HNSW,通过引入层级的概念以及启发式搜索，解决了搜索时，NSW无法区分long range与short range，以及面对高度聚集的数据时，搜索效率的低下。</p>
+
+</div>
+<div class="tags">
+<div class="taxosfloating_left">
+<p>Categories</p>
+</div>
+<div class="termsfloating_right">
+<p>
+<a href="/categories/vector%20search/">vector search</a>
+</p>
+</div>
+<div class="clearit"></div>
+</div>
+<div id="disqus_thread"></div>
+<script type="text/javascript">
+(function() {
+
+
+if (window.location.hostname == "localhost")
+  return;
+var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+var disqus_shortname = 'tangdh-life';
+dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+(document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to load the comments.</noscript>
+
+
+</article>
+</div>
+</main><script src="/js/dark-mode.js"></script>
+
+</body>
+</html>

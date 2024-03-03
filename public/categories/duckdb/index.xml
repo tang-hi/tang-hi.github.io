@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+	<channel>
+		<title>DuckDB on Don&#39;t Panic</title>
+		<link>http://localhost:1313/categories/duckdb/</link>
+		<description>Recent content in DuckDB on localhost:1313</description>
+		<generator>Hugo -- gohugo.io</generator>
+		<language>en-us</language>
+		<lastBuildDate>Sun, 03 Mar 2024 00:00:00 +0000</lastBuildDate>
+		<atom:link href="http://localhost:1313/categories/duckdb/index.xml" rel="self" type="application/rss+xml" />
+		<item>
+			<title>DuckDB -- 浮点数的压缩</title>
+			<link>http://localhost:1313/posts/database/duckdb-alp/</link>
+			<pubDate>Sun, 03 Mar 2024 00:00:00 +0000</pubDate>
+			<guid>http://localhost:1313/posts/database/duckdb-alp/</guid>
+			<description>
+			DuckDB 是一款开源 OLAP 数据库。与 SQLite 类似，本文将介绍DuckDB是如何对它的浮点数数组进行压缩
+			</description>
+		</item>
+		<item>
+			<title>DuckDB -- table&#39;s file format</title>
+			<link>http://localhost:1313/posts/database/duckdb-file-en/</link>
+			<pubDate>Tue, 12 Dec 2023 00:00:00 +0000</pubDate>
+			<guid>http://localhost:1313/posts/database/duckdb-file-en/</guid>
+			<description>
+			DuckDB is an open-source OLAP database. Similar to SQLite, this article will introduce how DuckDB stores its table structure.
+			</description>
+		</item>
+		<item>
+			<title>DuckDB --  MVCC和增删改查</title>
+			<link>http://localhost:1313/posts/database/duckdb-mvcc/</link>
+			<pubDate>Fri, 04 Aug 2023 00:00:00 +0000</pubDate>
+			<guid>http://localhost:1313/posts/database/duckdb-mvcc/</guid>
+			<description>
+			DuckDB 是一款开源 OLAP 数据库。与 SQLite 类似，本文将介绍DuckDB内部所使用的MVCC机制以及增删改查的实现
+			</description>
+		</item>
+		<item>
+			<title>DuckDB --  ART索引</title>
+			<link>http://localhost:1313/posts/database/duckdb-index/</link>
+			<pubDate>Fri, 21 Jul 2023 00:00:00 +0000</pubDate>
+			<guid>http://localhost:1313/posts/database/duckdb-index/</guid>
+			<description>
+			DuckDB 是一款开源 OLAP 数据库。与 SQLite 类似，本文将介绍DuckDB内部所使用的索引结构
+			</description>
+		</item>
+		<item>
+			<title>DuckDB -- table的存储格式</title>
+			<link>http://localhost:1313/posts/database/duckdb-file/</link>
+			<pubDate>Wed, 19 Jul 2023 00:00:00 +0000</pubDate>
+			<guid>http://localhost:1313/posts/database/duckdb-file/</guid>
+			<description>
+			DuckDB 是一款开源 OLAP 数据库。与 SQLite 类似，本文将介绍DuckDB是如何存储它的表结构
+			</description>
+		</item>
+	</channel>
+</rss>

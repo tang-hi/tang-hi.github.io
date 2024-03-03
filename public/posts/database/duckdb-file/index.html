@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><script src="/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=livereload" data-no-instant defer></script>
+<meta charset="UTF-8">
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-D5M6G40M25"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-D5M6G40M25');
+</script>
+<meta name="baidu-site-verification" content="codeva-vs6hGikUak" />
+<title>DuckDB -- table的存储格式 | Don&#39;t Panic</title>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="generator" content="Hugo 0.123.7">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="DuckDB 是一款开源 OLAP 数据库。与 SQLite 类似，本文将介绍DuckDB是如何存储它的表结构">
+<link rel="stylesheet" type="text/css" media="screen" href="/css/normalize.css" />
+<link rel="stylesheet" type="text/css" media="screen" href="/css/main.css" />
+<link rel="stylesheet" type="text/css" media="screen" href="/css/all.css" /><link rel="stylesheet" href="/css/katex.css" crossorigin="anonymous">
+<script defer src="/js/katex.js"  integrity="sha384-PFWG8XW41D5NzhNv5FegM1CUkw9nNLdWug8DuwnUoNEVop9n5frjcnbtsZtxTNjw" crossorigin="anonymous"></script>
+<script defer src="/js/auto-render.js" integrity="sha384-EN2q+JG5/3Z8gD7hT5WZqq+W+9wQR4P3IezfuZmGG5RkNXaaaks85seDJO7WkZlY" crossorigin="anonymous" onload="renderMathInElement(document.body);"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() { renderMathInElement(document.body, { delimiters: [ {left: "$$", right: "$$", display: true}, {left: "$", right: "$", display: false} ] }); });
+</script>
+
+
+
+
+<meta property="og:title" content="DuckDB -- table的存储格式" />
+<meta property="og:description" content="DuckDB 是一款开源 OLAP 数据库。与 SQLite 类似，本文将介绍DuckDB是如何存储它的表结构" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="http://localhost:1313/posts/database/duckdb-file/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-07-19T00:00:00+00:00" />
+<meta property="article:modified_time" content="2023-07-19T00:00:00+00:00" />
+
+<meta name="twitter:card" content="summary"/><meta name="twitter:title" content="DuckDB -- table的存储格式"/>
+<meta name="twitter:description" content="DuckDB 是一款开源 OLAP 数据库。与 SQLite 类似，本文将介绍DuckDB是如何存储它的表结构"/>
+
+<meta itemprop="name" content="DuckDB -- table的存储格式">
+<meta itemprop="description" content="DuckDB 是一款开源 OLAP 数据库。与 SQLite 类似，本文将介绍DuckDB是如何存储它的表结构"><meta itemprop="datePublished" content="2023-07-19T00:00:00+00:00" />
+<meta itemprop="dateModified" content="2023-07-19T00:00:00+00:00" />
+<meta itemprop="wordCount" content="313">
+<meta itemprop="keywords" content="" />
+</head>
+<body>
+<header>
+<div id="avatar">
+<a href="http://localhost:1313/"><img src="/avatar.jpeg" alt="Don&#39;t Panic"></a>
+</div>
+<div id="titletext">
+<h2 id="titleonly"><a href="http://localhost:1313/">Don&#39;t Panic</a></h2>
+</div>
+<div id="title-social">
+<div id="social">
+<nav><ul>
+<li><a href="https://github.com/tang-hi"><i title="Github" class="icons fab fa-github"></i></a></li>
+<li><a href="mailto:tangdhcs@gmail.com"><i title="Email" class="icons fas fa-envelope"></i></a></li>
+<li><a href="https://twitter.com/TangDh"><i title="Twitter" class="icons fab fa-twitter"></i></a></li>
+<li><a href="/index.xml"><i title="RSS" class="icons fas fa-rss"></i></a></li>
+<li><a><i title="Switch Dark Mode" class="dark-mode icons fas fa-moon"></i></a></li>
+</ul></nav>
+</div>
+</div>
+<div id="mainmenu">
+<nav>
+<ul>
+<li><a href="/">Home</a></li>
+<li><a href="/posts">All Posts</a></li>
+<li><a href="/about">About</a></li>
+<li><a href="/categories">Categories</a></li>
+</ul>
+</nav>
+</div>
+</header>
+<main>
+<div class="post">
+<article>
+<div class="post-header">
+<div class="meta">
+<div class="date">
+<span class="day">19</span>
+<span class="rest">Jul 2023</span>
+</div>
+</div>
+<div class="matter">
+<h1 class="title">DuckDB -- table的存储格式</h1>
+<p class="post-meta">
+<span class="post-meta">
+
+&nbsp;<i class="fas fa-clock"></i>&nbsp;2&nbsp;minutes
+
+
+ 
+&nbsp;| &nbsp;
+
+<i class="fas fa-book"></i>&nbsp;313&nbsp;words
+
+
+
+
+</span>
+
+</p>
+</div>
+</div>
+<div class="markdown">
+<p>本文将介绍DuckDB是如何存储它的表结构，本文仅涉及表结构，其他对于理解表结构无关的内容会进行忽略或者一笔带过。</p>
+<h2 id="前置知识">前置知识</h2>
+<h3 id="block-type">Block Type</h3>
+<p>DuckDB与其他数据库不同，它将所有的信息都存储在了同一个文件中。文件之中使用Block进行管理,Block分为<code>MetaBlock</code>以及<code>DataBlock</code></p>
+<ol>
+<li><code>DataBlock</code> 即为单纯的一个Block</li>
+<li><code>MetaBlock</code> 是一个Block List，它的头8个字节表示 <code>next_block_id</code>。因此如果内容过多，我们可以使用这样一个Block list来存储。</li>
+</ol>
+<div style="text-align: center">
+<img src="/pic/duckdb/meta-block.png"/>
+</div>
+<h3 id="field-reader">Field Reader</h3>
+<p>我们有时在一个Block中读取数据时，会采用<code>Field Reader</code>的方式来进行读取。该<code>Field Reader</code>与表的字段无关，仅仅是在你读取一些数据前，会先读取<code>max_field_count</code>和<code>total_size</code></p>
+<ol>
+<li><code>max_field_count</code>后续要读取的字段个数</li>
+<li><code>total_size</code> 后续要读取的总字节数。</li>
+</ol>
+<div style="text-align: center">
+<img src="/pic/duckdb/field-reader.png"/>
+</div>
+<h3 id="segment-tree">Segment Tree</h3>
+<p><code>Segment</code>可以认为是一块数据，我们使用<code>SegmentTree</code>来对<code>Segment</code>进行管理，虽然它的名字叫做<code>SegmentTree</code>，但实际上它内部是使用<code>vector</code>来保存<code>Segment</code>的。并且会使用二分查找来寻找指定的<code>Segment</code>，因此这要求Segment是按序存储的。<code>SegmentTree</code>的另一个特点就是支持懒加载。它并不会一次性将要管理的<code>Segment</code>全部读取进来，相反，它会在需要时，才从磁盘中读取<code>Segment</code>.</p>
+<div style="text-align: center">
+<img src="/pic/duckdb/segmenttree.png"/>
+</div>
+<h2 id="文件结构">文件结构</h2>
+<p>这一节我们开始介绍<code>DuckDB</code>的文件结构。</p>
+<div style="text-align: center">
+<img src="/pic/duckdb/header.png"/>
+</div>
+<p>我们从图中可以看到<code>DuckDB</code>有三个<code>Header</code>，因为这三个Header并不影响我们理解表的存储，因此这里只是简单的介绍一下。</p>
+<ol>
+<li>
+<p>MainHeader</p>
+<ol>
+<li><strong>checksum</strong> 校验和</li>
+<li><strong>Magic bytes</strong> 确定这是duckDB的文件</li>
+<li><strong>version numbers</strong> 版本号</li>
+<li><strong>flags</strong> 表明该数据库是否可读，可写</li>
+</ol>
+</li>
+<li>
+<p>DataBaseHeader</p>
+<ol>
+<li><strong>iteration</strong> 迭代次数</li>
+<li><strong>meta block</strong> 存放data的第一个block的block-id</li>
+<li><strong>free list</strong> 可被复用的block</li>
+<li><strong>block count</strong> 总block数</li>
+</ol>
+</li>
+</ol>
+<p>下面我们可以看到<code>Data</code>的存储,它由一个<code>schema count</code>和 <strong>${schema_count}</strong> 个<code>schema</code>组成，我们的表就存储在<code>schema</code>中。(schema在DuckDB中可以认为就是一个database)</p>
+<div style="text-align: center">
+<img src="/pic/duckdb/overview.png"/>
+</div>
+我们继续看`schema`的存储结构，第一个字段就是`schema`的名称,随后跟着的就是该`schema`所拥有的各种类型的个数。下面我们简单介绍各种类型。有兴趣的可以自己看一下官网的定义。这里我们只关注`table`的数据.
+<ol>
+<li><a href="https://duckdb.org/docs/sql/data_types/enum" target="_blank">enum</a></li>
+<li><a href="https://duckdb.org/docs/sql/statements/create_sequence" target="_blank">sequence</a></li>
+<li><a href="https://duckdb.org/docs/sql/statements/create_view" target="_blank">view</a></li>
+<li><a href="https://duckdb.org/docs/sql/statements/create_macro" target="_blank">macro</a></li>
+<li><a href="https://duckdb.org/docs/sql/indexes" target="_blank">indexes</a></li>
+</ol>
+<p>我们继续查看<code>table</code>的结构</p>
+<div style="text-align: center">
+<img src="/pic/duckdb/table_data.png"/>
+</div>
+<p>我们从图中可以看到<code>table</code>中前三个字段分别是<code>catalog name</code>, <code>schema name</code>, <code>table name</code>. 我们通过这三个字段可以确定这个表属于哪一个文件(catalog)的哪一个数据库(schema)的哪一个表.
+<code>costraints</code>这一字段来表明该表的一些约束,比如Not Null, Unique等.我们这篇文章不会深究这部分,我们主要研究<code>Columns</code>以及<code>table data</code>字段.</p>
+<h3 id="columns">Columns</h3>
+<p>该字段保存的是<code>table</code>各个列的定义.</p>
+<div style="text-align: center">
+<img src="/pic/duckdb/column-define.png"/>
+</div>
+我们可以看到,第一个字段保存的是column的数量,该字段后面紧跟着每个column的定义.我们下面来看一下各个字段的意义
+<ol>
+<li><strong>column name</strong> 字段名</li>
+<li><strong>column type</strong> 字段类型</li>
+<li><strong>expression</strong> 表达式, 有些字段是通过表达式生成的.</li>
+<li><strong>table Column type</strong> 这个不同于<strong>column type</strong>, 并不表示字段类型,他只有两个取值,一个是<strong>STANDARD</strong>, 另一个则是<strong>GENERATED</strong> . (其实我也不是太明白这个字段的意思,大概是用来判断这个字段是不是生成的)</li>
+<li><strong>compression type</strong> 表明这个字段所采用的压缩方法.</li>
+</ol>
+<p>在获得了column的类型以后,其实我们已经完全知晓了table的整个结构,剩下的就是实际数据以及索引的数据了.而这些数据则需要通过<code>table data</code>这个字段获得.</p>
+<h3 id="table-data">table data</h3>
+<div style="text-align: center">
+<img src="/pic/duckdb/table_data.png"/>
+</div>
+<p>因为索引以及表的实际数据一般都比较大,因此我们并没有在这里直接存储,而是存储了指向实际数据的指针(block-id, offset).</p>
+<p>我们配合这张图来对各个字段进行解释</p>
+<ol>
+<li><strong>table data block</strong> 指向实际表数据的指针.</li>
+<li><strong>total rows</strong> 该表的行数.</li>
+<li><strong>index num</strong> 该表的所有索引数量.</li>
+<li><strong>index</strong> 指向索引的指针.</li>
+</ol>
+<p>下面我们看一下<code>table data block</code>的实际数据存储的结构</p>
+<div style="text-align: center">
+<img src="/pic/duckdb/row-group.png"/>
+</div>
+<p>最开始存储的是一系列column数据的元信息（后面会介绍column data block的结构)，后两个个字段十分好理解，第一个存储着表的统计信息，另一个存储着 <code>row group</code> 数量。
+这里引出两个问题，什么是<code>row group</code> ，为什么存储格式不和前面一样即&lt;data-count, data, data, &hellip; data&gt;.而是只存储了一个<code>row group pointer</code>,如果<code>row group count</code> 大于1怎么办？</p>
+<h3 id="row-group">row group</h3>
+<p>我们都知道OLAP一般采取列式存储,而OLTP则采取行式存储。尽管在读取，计算方面列式存储优于行式存储，但如果是频繁的增删改查，行式存储则优于列式存储。因此DuckDB在这里做了一个折衷方案，即将tuple进行分组，组内进行列式存储。目前是每<code>122880</code>分为一组。</p>
+<h3 id="为什么只有一个row-group-pointer">为什么只有一个row group pointer</h3>
+<p>因为row group一定是按照行号按序存储的，同时它存储的block为<code>meta block</code>，所以它可以通过SegmentTree进行管理，从而可以对后续的<code>row group</code>进行<strong>懒加载</strong>, 当需要时再直接向后读取即可，因此在这里只需要存储第一块的block-id了。</p>
+<p>下面我们再看一下<code>row group</code>的存储结构</p>
+<ol>
+<li><strong>row start</strong> 该row group的起始行号</li>
+<li><strong>tuple count</strong> 该row group的行数</li>
+<li><strong>column pointers</strong> 因为row group中是按列存储，因此该pointer指向column的实际存储地址</li>
+<li><strong>versions</strong> 这个字段没太细看，应该是mvcc相关的内容。</li>
+</ol>
+<p>我们继续看<code>column data block</code>的存储结构</p>
+<div style="text-align: center">
+<img src="/pic/duckdb/column-data-block.png"/>
+</div>
+<p>我们惊讶的发现这里仍旧不是实际存储数据的地方，存放的还是指针，这是为什么？原因在于实际的column数据是存放在<code>pure block</code>中的，即它没法像<code>meta block</code>那样有一个 <code>block list</code>，而每个block的大小是定死的，因此我们需要一个个block存储，这里的<code>data pointer</code>就充当了<code>block list</code>的链接作用。</p>
+<p>按照惯例，依旧解释一下各字段的含义</p>
+<ol>
+<li><strong>row start</strong> 这片数据的开始行号</li>
+<li><strong>tuple count</strong> 存储的总行数</li>
+<li><strong>block id</strong> 实际数据所在的block id</li>
+<li><strong>offset</strong> 实际数据所在的block id 的offset</li>
+<li><strong>compress</strong> 数据所采用的压缩方式</li>
+<li><strong>stat</strong> 该部分数据的统计信息</li>
+</ol>
+<p>现在我们来到了column数据所在的block。存储的格式会因为压缩方式不同而不同，我这里简单介绍几种，有兴趣的可以自己看一下其他几种。</p>
+<div style="text-align: center">
+<img src="/pic/duckdb/compress1.png"/>
+</div>
+<h3 id="const--column">Const  Column</h3>
+<p>const column，即所有的值都一样，所以我们可以完全不存储任何数据。只需从统计信息中得到min value即可</p>
+<h3 id="uncompress-column">uncompress column</h3>
+<p>uncompress column，即不压缩。对于像<code>uint32</code>, <code>uint8</code>这样的数据类型，因为是固定大小，因此我们只要一个个读取即可。但是对于像<code>string</code> 这样非定长的数据类型,我们就会采用另一种方式来存储,即 Dictionary Compress(说好的不压缩呢！)</p>
+<p>对于string首先前两个字段就可以得到<code>dict</code>的位置</p>
+<ol>
+<li><code>dict_start = dict_end - dict_size</code></li>
+<li><code>dict_end = dict_end</code></li>
+<li><code>dict_size = dict_size</code></li>
+</ol>
+<p>我们在这里将<code>dict</code>可以看作string pool，而offset则是对应的起始位置，而<code>offsets[i] - offsets[i-1]</code>即为长度。这么说有点抽象，我们举一个例子。</p>
+<div style="text-align: center">
+<img src="/pic/duckdb/string-compress.png"/>
+</div>
+<p>这个例子里面我们一共有三个字符串 <code>foo</code> ,<code>bar</code> , <code>duckdb</code></p>
+<p>我们将这三个字符串逆序存放在dict中。offset则是相对于<code>dict end</code>的offset.通过这种方式我们可以定位到相应的string的首地址。</p>
+<ol>
+<li>
+<p><strong>foo</strong><br>
+head = dict - offset = dict - 3</p>
+<p>length = 3 - 0 = 3</p>
+</li>
+<li>
+<p><strong>bar</strong><br>
+head = dict - offset = dict - 6</p>
+<p>length = 6 - 3 = 3</p>
+</li>
+<li>
+<p><strong>foo</strong><br>
+head = dict - offset = dict - 12</p>
+<p>length = 12 - 6 = 6</p>
+</li>
+</ol>
+<p>还记得我们说过column data所在的block都是<code>pure block</code>， 如果string的长度超长怎么办？
+我们会通过将offset取负数，表明该string较长，同时在dict中对应位置存储(block id, offset)，然后去另一个block中读取该string。</p>
+<h3 id="rle-column-and-bitpacking">RLE column and bitpacking</h3>
+<div style="text-align: center">
+<img src="/pic/duckdb/compress2.png"/>
+</div>
+<p>RLE column相对简单，前面存储的是值，后面存储该值出现的次数。通过 <code>RLE count offset</code>将两者进行分隔。</p>
+<p>bitpack column留给有兴趣的读者自己研究。</p>
+<h3 id="dictionary-column">Dictionary column</h3>
+<div style="text-align: center">
+<img src="/pic/duckdb/compress3.png"/>
+</div>
+<p>如果你理解了<code>uncompress column</code>中string的存储方式，那你也会较为容易的理解<code>Dictionary column</code>， 其中dict含义保持不变，index Buffer则是之前提到的<strong>offsets</strong>,<strong>bitpacking</strong> 存储的则是该行对应的值是index Buffer中的第几个。通过 <code>dict.get(indexBuffer[bitpacking[i]])</code> 获得存储的值。</p>
+<p>值得注意的是，这里还有一个优化时，在实际扫描时，会先对dict进行解压，而后如果发现要扫描所有数据时，只需要解压bitpacking即可。</p>
+<h3 id="last">Last</h3>
+<p>本文介绍了DuckDB中table的存储结构，duckDB相比于其他的数据库，它仅使用一个文件存储整个数据库(其实我也不知道这是好是坏，但是它的定位是单机数据库，不寻求分布式能力，也许还可以？) 同时它使用了row group的方案，并对其进行懒加载的方式提升性能。column也支持多种压缩格式。</p>
+
+</div>
+<div class="tags">
+<div class="taxosfloating_left">
+<p>Categories</p>
+</div>
+<div class="termsfloating_right">
+<p>
+<a href="/categories/database/">database</a>
+<a href="/categories/duckdb/">duckdb</a>
+</p>
+</div>
+<div class="clearit"></div>
+</div>
+<div id="disqus_thread"></div>
+<script type="text/javascript">
+(function() {
+
+
+if (window.location.hostname == "localhost")
+  return;
+var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+var disqus_shortname = 'tangdh-life';
+dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+(document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to load the comments.</noscript>
+
+
+</article>
+</div>
+</main><script src="/js/dark-mode.js"></script>
+
+</body>
+</html>

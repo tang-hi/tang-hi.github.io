@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><script src="/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=livereload" data-no-instant defer></script>
+<meta charset="UTF-8">
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-D5M6G40M25"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-D5M6G40M25');
+</script>
+<meta name="baidu-site-verification" content="codeva-vs6hGikUak" />
+<title>DuckDB --  MVCC和增删改查 | Don&#39;t Panic</title>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="generator" content="Hugo 0.123.7">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="DuckDB 是一款开源 OLAP 数据库。与 SQLite 类似，本文将介绍DuckDB内部所使用的MVCC机制以及增删改查的实现">
+<link rel="stylesheet" type="text/css" media="screen" href="/css/normalize.css" />
+<link rel="stylesheet" type="text/css" media="screen" href="/css/main.css" />
+<link rel="stylesheet" type="text/css" media="screen" href="/css/all.css" /><link rel="stylesheet" href="/css/katex.css" crossorigin="anonymous">
+<script defer src="/js/katex.js"  integrity="sha384-PFWG8XW41D5NzhNv5FegM1CUkw9nNLdWug8DuwnUoNEVop9n5frjcnbtsZtxTNjw" crossorigin="anonymous"></script>
+<script defer src="/js/auto-render.js" integrity="sha384-EN2q+JG5/3Z8gD7hT5WZqq+W+9wQR4P3IezfuZmGG5RkNXaaaks85seDJO7WkZlY" crossorigin="anonymous" onload="renderMathInElement(document.body);"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() { renderMathInElement(document.body, { delimiters: [ {left: "$$", right: "$$", display: true}, {left: "$", right: "$", display: false} ] }); });
+</script>
+
+
+
+
+<meta property="og:title" content="DuckDB --  MVCC和增删改查" />
+<meta property="og:description" content="DuckDB 是一款开源 OLAP 数据库。与 SQLite 类似，本文将介绍DuckDB内部所使用的MVCC机制以及增删改查的实现" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="http://localhost:1313/posts/database/duckdb-mvcc/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-08-04T00:00:00+00:00" />
+<meta property="article:modified_time" content="2023-08-04T00:00:00+00:00" />
+
+<meta name="twitter:card" content="summary"/><meta name="twitter:title" content="DuckDB --  MVCC和增删改查"/>
+<meta name="twitter:description" content="DuckDB 是一款开源 OLAP 数据库。与 SQLite 类似，本文将介绍DuckDB内部所使用的MVCC机制以及增删改查的实现"/>
+
+<meta itemprop="name" content="DuckDB --  MVCC和增删改查">
+<meta itemprop="description" content="DuckDB 是一款开源 OLAP 数据库。与 SQLite 类似，本文将介绍DuckDB内部所使用的MVCC机制以及增删改查的实现"><meta itemprop="datePublished" content="2023-08-04T00:00:00+00:00" />
+<meta itemprop="dateModified" content="2023-08-04T00:00:00+00:00" />
+<meta itemprop="wordCount" content="2461">
+<meta itemprop="keywords" content="" />
+</head>
+<body>
+<header>
+<div id="avatar">
+<a href="http://localhost:1313/"><img src="/avatar.jpeg" alt="Don&#39;t Panic"></a>
+</div>
+<div id="titletext">
+<h2 id="titleonly"><a href="http://localhost:1313/">Don&#39;t Panic</a></h2>
+</div>
+<div id="title-social">
+<div id="social">
+<nav><ul>
+<li><a href="https://github.com/tang-hi"><i title="Github" class="icons fab fa-github"></i></a></li>
+<li><a href="mailto:tangdhcs@gmail.com"><i title="Email" class="icons fas fa-envelope"></i></a></li>
+<li><a href="https://twitter.com/TangDh"><i title="Twitter" class="icons fab fa-twitter"></i></a></li>
+<li><a href="/index.xml"><i title="RSS" class="icons fas fa-rss"></i></a></li>
+<li><a><i title="Switch Dark Mode" class="dark-mode icons fas fa-moon"></i></a></li>
+</ul></nav>
+</div>
+</div>
+<div id="mainmenu">
+<nav>
+<ul>
+<li><a href="/">Home</a></li>
+<li><a href="/posts">All Posts</a></li>
+<li><a href="/about">About</a></li>
+<li><a href="/categories">Categories</a></li>
+</ul>
+</nav>
+</div>
+</header>
+<main>
+<div class="post">
+<article>
+<div class="post-header">
+<div class="meta">
+<div class="date">
+<span class="day">04</span>
+<span class="rest">Aug 2023</span>
+</div>
+</div>
+<div class="matter">
+<h1 class="title">DuckDB --  MVCC和增删改查</h1>
+<p class="post-meta">
+<span class="post-meta">
+
+&nbsp;<i class="fas fa-clock"></i>&nbsp;12&nbsp;minutes
+
+
+ 
+&nbsp;| &nbsp;
+
+<i class="fas fa-book"></i>&nbsp;2461&nbsp;words
+
+
+
+
+</span>
+
+</p>
+</div>
+</div>
+<div class="markdown">
+<p>DuckDB的MVCC实现来自于<a href="https://db.in.tum.de/~muehlbau/papers/mvcc.pdf" target="_blank">论文</a>，但是DuckDB做了一定的简化。即它的隔离级别并不是可串行化，而是保证Snapshot的隔离，从而它的实现复杂度大幅降低。这篇文章会详细描述DuckDB的MVCC机制，以及增删改查是如何实现的。</p>
+<h2 id="注意">注意:</h2>
+<ol>
+<li>DuckDB是我看的第一个数据库的实现。因此这篇文章并不会比较它与其他数据库在MVCC上的优劣。</li>
+<li>这篇文章并不会事无巨细的把所有实现细节解析出来，只是为了让你可以完整了解是怎么实现的，后续实际看源码时可以更方便的理解。</li>
+</ol>
+<h2 id="前置知识">前置知识</h2>
+<ol>
+<li>
+<p><strong>DuckDB的状态跟踪</strong></p>
+<p>DuckDB无论增删改查都会有一个状态一直跟踪整个过程，比如查询表的话，它会有一个<code>TableScanGlobalSourceState</code>和一个<code>TableScanLocalSourceState</code>对整个查询流程进行跟踪，这个state主要追踪的是当前进行到哪一行了，还剩多少行，等等。</p>
+<p>对于每个算子，这个global和local代表的具体含义都会一些不同，后面具体讲增删改查的时候会进行描述。因为DuckDB的table格式可以划分为rowGroups -&gt; rowGroup -&gt; column -&gt; segment。所以实际上每一个单元都有一个相应的state进行追踪。</p>
+</li>
+</ol>
+<div style="text-align: center">
+<img src="/pic/duckdb/mvcc-state.png"/>
+</div>
+<ol start="2">
+<li>
+<p><strong>DuckDB的local storage</strong></p>
+<p>DuckDB的存储可以分为两块。一块是<code>table</code>，代表这个表在磁盘中的状态，另一块是<code>local storage</code>, 代表这个事务中对该表做的操作，比如增删改查等等&hellip;. 而<code>local storage</code>只有在commit的时候才会去和table进行合并。这有两点好处。</p>
+<ol>
+<li>增加事务的并发度。</li>
+<li>rollback时几乎无成本。</li>
+</ol>
+</li>
+</ol>
+<div style="text-align: center">
+<img src="/pic/duckdb/mvcc-local-storage.png"/>
+</div>
+<ol start="3">
+<li>
+<p><strong>DuckDB的MVCC粒度</strong></p>
+<p>DuckDB的的MVCC粒度是对<code>Segment</code>而言的，即每一个column中的部分数据，会有一个<code>version info</code>记录着它是被哪个事务加入的，又是被哪个事务删除的。同时还会有一个<code>Update Segment</code>记录着它的Update Version.</p>
+</li>
+</ol>
+<div style="text-align: center">
+<img src="/pic/duckdb/mvcc-singualrity.png"/>
+</div>
+<h2 id="mvcc">MVCC</h2>
+<p>DuckDB会为每一个新创建的transaction赋两个值。</p>
+<ol>
+<li>transaction id（从2^62开始递增）</li>
+<li>start time （从2开始递增)</li>
+</ol>
+<p>这样赋值的原因在于，在一个<code>transaction</code>还未提交时，我们会使用<code>transaction id</code>作为它的<code>commit id</code>,只有当它提交以后，我们才会将<code>commit id</code>设置为提交的这一时间。这样就可以确保当事务仍未提交时，它所作出的更改不会被看到。</p>
+<p>我先用文字描述MVCC的实现。然后通过一个例子更直观的理解该实现。</p>
+<h3 id="文字描述">文字描述</h3>
+<p>我们会对每一个<code>Segment</code>维护一个链表，链表中存储版本信息。版本信息中的<code>version</code>初始化为<code>transaction id</code>，当commit时，再更新为<code>commit id</code> <strong>(版本信息中保存的是，这个事务变更前的数据)</strong>。</p>
+<p>当我们对数据进行扫描时，我们会不断比较<code>version</code>与当前事务的<code>start time</code>。当满足以下两个条件，我们就会应用其保存的版本。</p>
+<ol>
+<li>
+<p>version_number &gt; start_time</p>
+<p>说明这个版本还未commit，或者这个版本在事务开始之后才commit.那么我们应当还原成这个事务之前的版本，即应用该版本。</p>
+</li>
+<li>
+<p>version_number != transaction_id</p>
+<p>我们不会将数据还原为这次事务之前的版本。</p>
+</li>
+</ol>
+<p>当我们对数据进行更改时，我们会直接在原地进行修改，然后将更改之前的数据保存进<code>Undo Buffer</code>，插入链表的头部。</p>
+<blockquote>
+<p>DuckDB为了可以对列进行压缩，并没有直接进行原地更改，相反它是在链表头部保存了一个哑节点。它的原地修改就是直接修改哑节点，这个并不妨碍理解MVCC，所以可以直接认为Duck也在原地修改。</p>
+</blockquote>
+<h3 id="例子">例子</h3>
+<p>下面我们考虑以下例子。</p>
+<p>我们有一张银行存款表，里面每一个储户的余额都为10，同时我们有4个事务同时执行。</p>
+<ol>
+<li><strong>Txn1</strong> Thomas 向 Larry 转1元</li>
+<li><strong>Txn2</strong> Thomas 向 Tom 转1元</li>
+<li><strong>Txn3</strong> 求和</li>
+<li><strong>Txn4</strong> Thomas 向 Andy 转1元</li>
+</ol>
+<div style="text-align: center">
+<img src="/pic/duckdb/mvcc-init.png"/>
+</div>
+<p>我们假设<strong>Txn1</strong>, <strong>Txn4</strong>已经commit， 而 <strong>Txn2</strong>, <strong>Txn3</strong>仍在执行，并且<strong>Txn1</strong>, <strong>Txn4</strong>在<code>T1</code>, <code>T2</code>commit，而<strong>Txn2</strong>, <strong>Txn3</strong>在<code>T3</code>,<code>T4</code>开启了事务。他们的<code>transaction id</code>为一个十分大的数。那么此时整体的version info 如下图所示。</p>
+<div style="text-align: center">
+<img src="/pic/duckdb/mvcc-version-info.png"/>
+</div>
+<p>我们可以看到每一个事务都有一个对应的<code>Undo Buffer</code>,同时每一版本的信息都有一个链表来进行维护。我们下面来考虑事务<strong>Txn3</strong>的执行情况。</p>
+<p>当读取Thomas的Balance时，table中的数据为10,但是因为Thomas的版本信息不为null，所以我们需要遍历链表查看是否有更合适的版本。</p>
+<ol>
+<li>哑节点直接应用， banlance 变为7</li>
+<li><code>UndoBuffer Ty</code> , 因为Ty &gt; T3， balance变为8。</li>
+<li><code>UndoBuffer T2</code> , 因为T2  &lt; T3， 不应用。</li>
+<li><code>UndoBuffer T1</code> , 因为T1  &lt; T3， 不应用。</li>
+</ol>
+<p>最终得到的结果为8.符合快照隔离的要求。</p>
+<p>后续几个读取的流程留给读者自己练习, 我们下面介绍DuckDB的增删改查。</p>
+<h2 id="insert">Insert</h2>
+<p>Insert 的入口函数为<code>PhysicalInsert::Sink</code></p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c++" data-lang="c++"><span style="display:flex;"><span><span style="color:#080;font-weight:bold">if</span> (<span style="color:#333">!</span>parallel) {
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// init global state if not initialized
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		<span style="color:#080;font-weight:bold">if</span> (<span style="color:#333">!</span>gstate.initialized) {
+</span></span><span style="display:flex;"><span>			storage.InitializeLocalAppend(gstate.append_state, context.client);
+</span></span><span style="display:flex;"><span>			gstate.initialized <span style="color:#333">=</span> <span style="color:#007020">true</span>;
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// check if has some conflict with the rules such as UNIQUE, FOREIGN KEY, etc.
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		idx_t updated_tuples <span style="color:#333">=</span> OnConflictHandling(table, context, lstate);
+</span></span><span style="display:flex;"><span>		gstate.insert_count <span style="color:#333">+=</span> lstate.insert_chunk.size();
+</span></span><span style="display:flex;"><span>		gstate.insert_count <span style="color:#333">+=</span> updated_tuples;
+</span></span><span style="display:flex;"><span>		storage.LocalAppend(gstate.append_state, table, context.client, lstate.insert_chunk, <span style="color:#007020">true</span>);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">if</span> (return_chunk) {
+</span></span><span style="display:flex;"><span>			gstate.return_collection.Append(lstate.insert_chunk);
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>	} <span style="color:#080;font-weight:bold">else</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// add into local state&#39;s insert chunk
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		D_ASSERT(<span style="color:#333">!</span>return_chunk);
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// parallel append
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		<span style="color:#080;font-weight:bold">if</span> (<span style="color:#333">!</span>lstate.local_collection) {
+</span></span><span style="display:flex;"><span>			lock_guard<span style="color:#333">&lt;</span>mutex<span style="color:#333">&gt;</span> l(gstate.lock);
+</span></span><span style="display:flex;"><span>			<span style="color:#080;font-weight:bold">auto</span> <span style="color:#333">&amp;</span>table_info <span style="color:#333">=</span> storage.info;
+</span></span><span style="display:flex;"><span>			<span style="color:#080;font-weight:bold">auto</span> <span style="color:#333">&amp;</span>block_manager <span style="color:#333">=</span> TableIOManager<span style="color:#333">::</span>Get(storage).GetBlockManagerForRowData();
+</span></span><span style="display:flex;"><span>			lstate.local_collection <span style="color:#333">=</span>
+</span></span><span style="display:flex;"><span>			    make_uniq<span style="color:#333">&lt;</span>RowGroupCollection<span style="color:#333">&gt;</span>(table_info, block_manager, insert_types, MAX_ROW_ID);
+</span></span><span style="display:flex;"><span>			lstate.local_collection<span style="color:#333">-&gt;</span>InitializeEmpty();
+</span></span><span style="display:flex;"><span>			lstate.local_collection<span style="color:#333">-&gt;</span>InitializeAppend(lstate.local_append_state);
+</span></span><span style="display:flex;"><span>			lstate.writer <span style="color:#333">=</span> <span style="color:#333">&amp;</span>gstate.table.GetStorage().CreateOptimisticWriter(context.client);
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		OnConflictHandling(table, context, lstate);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">auto</span> new_row_group <span style="color:#333">=</span> lstate.local_collection<span style="color:#333">-&gt;</span>Append(lstate.insert_chunk, lstate.local_append_state);
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">if</span> (new_row_group) {
+</span></span><span style="display:flex;"><span>			lstate.writer<span style="color:#333">-&gt;</span>WriteNewRowGroup(<span style="color:#333">*</span>lstate.local_collection);
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>	}
+</span></span></code></pre></div><p>从代码中，我们可以看到DuckDB的Insert有两种模式</p>
+<ol>
+<li>并行化，每一个算子有自己独立的存储空间，并行插入，Combine的时候合入全局的存储空间 (合入的成本相较于插入成本低很多，因为只需要把指针指向新的位置即可)。</li>
+<li>非并行化，每一个算子直接往全局的存储空间进行插入。</li>
+</ol>
+<div style="text-align: center">
+<img src="/pic/duckdb/mvcc-insert-1.png"/>
+</div>
+<p>这里我只介绍非并行化，因为插入的流程是一样的，只是处理的方式不同，因此如果你理解了非并行化，那么你也理解了并行化的方式。</p>
+<p>还记得前置知识中，我们说过，DuckDB中每一个table除了它在磁盘中的表示形式，他还有一个<code>Local Storage</code>专门用来存储未提交的事务对<code>table</code>进行的增量操作.而这个<code>Local Storae</code>的格式与table是完全一致的.即我们的添加流程为。</p>
+<ol>
+<li>找到<code>table</code>中要添加的<code>RowGroup</code></li>
+<li>找到<code>RowGroup</code>中要添加的<code>Column</code></li>
+<li>找到<code>Column</code>要添加的<code>Segment</code></li>
+<li>根据<code>Segement</code>使用的压缩方法不同，调用不同的压缩算法，把数据添加进<code>Segment</code>。
+对应的代码片段参考如下</li>
+</ol>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span><span style="color:#888">// add into rowGroups
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span><span style="color:#339;font-weight:bold">bool</span> RowGroupCollection<span style="color:#333">::</span>Append(DataChunk <span style="color:#333">&amp;</span>chunk, TableAppendState <span style="color:#333">&amp;</span>state) {
+</span></span><span style="display:flex;"><span>	
+</span></span><span style="display:flex;"><span>	idx_t append_count <span style="color:#333">=</span> chunk.size();
+</span></span><span style="display:flex;"><span>	idx_t remaining <span style="color:#333">=</span> chunk.size();
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">auto</span> current_row_group <span style="color:#333">=</span> state.row_group_append_state.row_group;
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// check how much we can fit into the current row_group
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	idx_t append_count <span style="color:#333">=</span>
+</span></span><span style="display:flex;"><span>		    MinValue<span style="color:#333">&lt;</span>idx_t<span style="color:#333">&gt;</span>(remaining, RowGroup<span style="color:#333">::</span>ROW_GROUP_SIZE <span style="color:#333">-</span> state.row_group_append_state.offset_in_row_group);
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">if</span> (append_count <span style="color:#333">&gt;</span> <span style="color:#00d;font-weight:bold">0</span>) {
+</span></span><span style="display:flex;"><span>			<span style="color:#888">// !! insert into row group
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>			current_row_group<span style="color:#333">-&gt;</span>Append(state.row_group_append_state, chunk, append_count);
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// skip....
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#888">// add into rowGroup
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span><span style="color:#339;font-weight:bold">void</span> RowGroup<span style="color:#333">::</span>Append(RowGroupAppendState <span style="color:#333">&amp;</span>state, DataChunk <span style="color:#333">&amp;</span>chunk, idx_t append_count) {
+</span></span><span style="display:flex;"><span>	<span style="color:#888">// append to the current row_group
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#888">// append into all column
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#080;font-weight:bold">for</span> (idx_t i <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">0</span>; i <span style="color:#333">&lt;</span> GetColumnCount(); i<span style="color:#333">++</span>) {
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">auto</span> <span style="color:#333">&amp;</span>col_data <span style="color:#333">=</span> GetColumn(i);
+</span></span><span style="display:flex;"><span>		col_data.Append(state.states[i], chunk.data[i], append_count);
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#888">// update row group append state
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	state.offset_in_row_group <span style="color:#333">+=</span> append_count;
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#888">// add into column
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span><span style="color:#339;font-weight:bold">void</span> ColumnData<span style="color:#333">::</span>AppendData(BaseStatistics <span style="color:#333">&amp;</span>stats, ColumnAppendState <span style="color:#333">&amp;</span>state, UnifiedVectorFormat <span style="color:#333">&amp;</span>vdata, idx_t count) {
+</span></span><span style="display:flex;"><span>	
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">while</span> (<span style="color:#007020">true</span>) {
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// append the data from the vector
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		idx_t copied_elements <span style="color:#333">=</span> state.current<span style="color:#333">-&gt;</span>Append(state, vdata, offset, count);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// we couldn&#39;t fit everything we wanted in the current column segment, create a new one
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		{
+</span></span><span style="display:flex;"><span>			<span style="color:#080;font-weight:bold">auto</span> l <span style="color:#333">=</span> data.Lock();
+</span></span><span style="display:flex;"><span>			AppendTransientSegment(l, state.current<span style="color:#333">-&gt;</span>start <span style="color:#333">+</span> state.current<span style="color:#333">-&gt;</span>count);
+</span></span><span style="display:flex;"><span>			state.current <span style="color:#333">=</span> data.GetLastSegment(l);
+</span></span><span style="display:flex;"><span>			state.current<span style="color:#333">-&gt;</span>InitializeAppend(state);
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// skip...
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	}
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#888">// use compress function to add data into column
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>idx_t ColumnSegment<span style="color:#333">::</span>Append(ColumnAppendState <span style="color:#333">&amp;</span>state, UnifiedVectorFormat <span style="color:#333">&amp;</span>append_data, idx_t offset, idx_t count) {
+</span></span><span style="display:flex;"><span>	D_ASSERT(segment_type <span style="color:#333">==</span> ColumnSegmentType<span style="color:#333">::</span>TRANSIENT);
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">if</span> (<span style="color:#333">!</span>function.get().append) {
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">throw</span> <span style="color:#06b;font-weight:bold">InternalException</span>(<span style="background-color:#fff0f0">&#34;Attempting to append to a segment without append method&#34;</span>);
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">return</span> function.get().append(<span style="color:#333">*</span>state.append_state, <span style="color:#333">*</span><span style="color:#080;font-weight:bold">this</span>, stats, append_data, offset, count);
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>代码中有几点需要注意</p>
+<ol>
+<li>
+<p>如果<code>Segment</code>空间不够，我们会创建新的<code>Segment</code>,但是这个<code>Segement</code>的类型为transientSegment。意味着这是一个临时Segment，当内存不足时，会把它写到临时文件中，然后释放这块内存。</p>
+</li>
+<li>
+<p>当我们写满一块<code>RowGroup</code>时，我们会将其刷入磁盘,仿佛这个<code>RowGroup</code>已经被添加到了table中。这是因为如果不这么做，当我们要插入的数据非常大时，我们需要频繁的把数据写到临时文件，这可能造成较大的性能问题。而提前刷入磁盘，我们只需要在rollback时，标记该区域为未使用区域，唯一的问题就是可能造成数据库磁盘文件膨胀。有兴趣的可以查看这个<a href="https://github.com/duckdb/duckdb/pull/4996" target="_blank">PR</a>。</p>
+</li>
+</ol>
+<p>在我们将数据添加到<code>Local Storage</code>后,我们需要对该Insert进行Commit。</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c++" data-lang="c++"><span style="display:flex;"><span>string DuckTransaction<span style="color:#333">::</span>Commit(AttachedDatabase <span style="color:#333">&amp;</span>db, transaction_t commit_id, <span style="color:#339;font-weight:bold">bool</span> checkpoint) <span style="color:#080;font-weight:bold">noexcept</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#888">// skip...
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#080;font-weight:bold">try</span> {
+</span></span><span style="display:flex;"><span>		
+</span></span><span style="display:flex;"><span>		storage<span style="color:#333">-&gt;</span>Commit(commit_state, <span style="color:#333">*</span><span style="color:#080;font-weight:bold">this</span>);
+</span></span><span style="display:flex;"><span>		undo_buffer.Commit(iterator_state, log, commit_id);
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">if</span> (log) {
+</span></span><span style="display:flex;"><span>			<span style="color:#888">// commit any sequences that were used to the WAL
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>			<span style="color:#080;font-weight:bold">for</span> (<span style="color:#080;font-weight:bold">auto</span> <span style="color:#333">&amp;</span><span style="color:#970;font-weight:bold">entry</span> : sequence_usage) {
+</span></span><span style="display:flex;"><span>				log<span style="color:#333">-&gt;</span>WriteSequenceValue(<span style="color:#333">*</span>entry.first, entry.second);
+</span></span><span style="display:flex;"><span>			}
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">if</span> (storage_commit_state) {
+</span></span><span style="display:flex;"><span>            <span style="color:#888">// WAL Flush to DISK
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>			storage_commit_state<span style="color:#333">-&gt;</span>FlushCommit();
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">return</span> <span style="color:#06b;font-weight:bold">string</span>();
+</span></span><span style="display:flex;"><span>	} <span style="color:#080;font-weight:bold">catch</span> (std<span style="color:#333">::</span>exception <span style="color:#333">&amp;</span>ex) {
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">return</span> ex.what();
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>代码中我们可以看到事务的提交就是三个流程</p>
+<ol>
+<li>storage commit</li>
+<li>UndoBuffer commit</li>
+<li>WAL 刷到磁盘中</li>
+</ol>
+<h3 id="storage-commit">Storage Commit</h3>
+<p>这个相对简单就是遍历<code>LocalStorage</code>中的chunk，然后将其添加到<code>table</code>中。</p>
+<blockquote>
+<p>注意DuckDB每一个column都有insert_id, delete_id来描述，它是由哪个<code>transaction</code>添加的，由哪个<code>transaction</code>删除的。代码中将其称为<code>Version Info</code></p>
+</blockquote>
+<p>在将数据添加到<code>table</code>后，我们将添加的信息加入到<code>UndoBuffer</code>中。格式为</p>
+<div style="text-align: center">
+<img src="/pic/duckdb/mvcc-undo-insert.png"/>
+</div>
+<h3 id="undobuffer-commit">UndoBuffer Commit</h3>
+<p>逆序遍历<code>UndoBuffer</code>，根据不同的<code>Undo Flag</code>对每一个<code>Entry</code>进行不同的操作。
+对于Insert而言</p>
+<ol>
+<li>将新增的数据写到LOG中</li>
+<li>将table中的对应的version info 由<code>transaction id</code> 更改为<code>commit id</code></li>
+</ol>
+<h3 id="wal-刷到磁盘中">WAL 刷到磁盘中</h3>
+<p>在WAL中写WAL_FLUSH后，全部刷新到磁盘。后续Replay时，只有遇到WAL_FLUSH才会进行commit。因此如果在WAL刷到磁盘前断电，哪怕Storage/UndoBuffer Commit了，重启后也是不可见的。</p>
+<h2 id="delete">Delete</h2>
+<p>Delete 的入口函数为<code>PhysicalDelete::Sink</code></p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span>SinkResultType PhysicalDelete<span style="color:#333">::</span>Sink(ExecutionContext <span style="color:#333">&amp;</span>context, DataChunk <span style="color:#333">&amp;</span>chunk, OperatorSinkInput <span style="color:#333">&amp;</span>input) <span style="color:#080;font-weight:bold">const</span> {
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">auto</span> <span style="color:#333">&amp;</span>gstate <span style="color:#333">=</span> input.global_state.Cast<span style="color:#333">&lt;</span>DeleteGlobalState<span style="color:#333">&gt;</span>();
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">auto</span> <span style="color:#333">&amp;</span>ustate <span style="color:#333">=</span> input.local_state.Cast<span style="color:#333">&lt;</span>DeleteLocalState<span style="color:#333">&gt;</span>();
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#888">// get rows and
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#080;font-weight:bold">auto</span> <span style="color:#333">&amp;</span>transaction <span style="color:#333">=</span> DuckTransaction<span style="color:#333">::</span>Get(context.client, table.db);
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">auto</span> <span style="color:#333">&amp;</span>row_identifiers <span style="color:#333">=</span> chunk.data[row_id_index];
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#888">// skip...
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	gstate.deleted_count <span style="color:#333">+=</span> table.Delete(tableref, context.client, row_identifiers, chunk.size());
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">return</span> SinkResultType<span style="color:#333">::</span>NEED_MORE_INPUT;
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>idx_t DataTable<span style="color:#333">::</span>Delete(TableCatalogEntry <span style="color:#333">&amp;</span>table, ClientContext <span style="color:#333">&amp;</span>context, Vector <span style="color:#333">&amp;</span>row_identifiers, idx_t count) {
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">while</span> (pos <span style="color:#333">&lt;</span> count) {
+</span></span><span style="display:flex;"><span>		idx_t start <span style="color:#333">=</span> pos;
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// transaction inserted tuples have row identifiers &gt;= MAX_ROW_ID
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		<span style="color:#339;font-weight:bold">bool</span> is_transaction_delete <span style="color:#333">=</span> ids[pos] <span style="color:#333">&gt;=</span> MAX_ROW_ID;
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// figure out which batch of rows to delete now
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		<span style="color:#080;font-weight:bold">for</span> (pos<span style="color:#333">++</span>; pos <span style="color:#333">&lt;</span> count; pos<span style="color:#333">++</span>) {
+</span></span><span style="display:flex;"><span>			<span style="color:#339;font-weight:bold">bool</span> row_is_transaction_delete <span style="color:#333">=</span> ids[pos] <span style="color:#333">&gt;=</span> MAX_ROW_ID;
+</span></span><span style="display:flex;"><span>			<span style="color:#080;font-weight:bold">if</span> (row_is_transaction_delete <span style="color:#333">!=</span> is_transaction_delete) {
+</span></span><span style="display:flex;"><span>				<span style="color:#080;font-weight:bold">break</span>;
+</span></span><span style="display:flex;"><span>			}
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		idx_t current_offset <span style="color:#333">=</span> start;
+</span></span><span style="display:flex;"><span>		idx_t current_count <span style="color:#333">=</span> pos <span style="color:#333">-</span> start;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		Vector <span style="color:#06b;font-weight:bold">offset_ids</span>(row_identifiers, current_offset, pos);
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">if</span> (is_transaction_delete) {
+</span></span><span style="display:flex;"><span>			<span style="color:#888">// transaction-local delete
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>			<span style="color:#888">// transaction add and transaction delete
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>			delete_count <span style="color:#333">+=</span> local_storage.Delete(<span style="color:#333">*</span><span style="color:#080;font-weight:bold">this</span>, offset_ids, current_count);
+</span></span><span style="display:flex;"><span>		} <span style="color:#080;font-weight:bold">else</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#888">// regular table delete
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>			delete_count <span style="color:#333">+=</span> row_groups<span style="color:#333">-&gt;</span>Delete(transaction, <span style="color:#333">*</span><span style="color:#080;font-weight:bold">this</span>, ids <span style="color:#333">+</span> current_offset, current_count);
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">return</span> delete_count;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>从代码中可以看到，<code>delete</code>不同于<code>insert</code>，它是直接对table进行删除。但是delete会区分要删除的数据是transaction local的，还是table的。即是<code>local storage</code>还是<code>table</code>的,区分逻辑为transaction local的行号都是大于<code>MAX_ROW_ID</code>的。（删除逻辑是一样的，因此我们只需要看一个就行了）</p>
+<p>首先我们需要找到要删除的<code>Row Group</code></p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span>idx_t RowGroupCollection<span style="color:#333">::</span>Delete(TransactionData transaction, DataTable <span style="color:#333">&amp;</span>table, row_t <span style="color:#333">*</span>ids, idx_t count) {
+</span></span><span style="display:flex;"><span>	idx_t delete_count <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">0</span>;
+</span></span><span style="display:flex;"><span>	<span style="color:#888">// delete is in the row groups
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#888">// we need to figure out for each id to which row group it belongs
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#888">// usually all (or many) ids belong to the same row group
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#888">// we iterate over the ids and check for every id if it belongs to the same row group as their predecessor
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	idx_t pos <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">0</span>;
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">do</span> {
+</span></span><span style="display:flex;"><span>		idx_t start <span style="color:#333">=</span> pos;
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">auto</span> row_group <span style="color:#333">=</span> row_groups<span style="color:#333">-&gt;</span>GetSegment(ids[start]);
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">for</span> (pos<span style="color:#333">++</span>; pos <span style="color:#333">&lt;</span> count; pos<span style="color:#333">++</span>) {
+</span></span><span style="display:flex;"><span>			D_ASSERT(ids[pos] <span style="color:#333">&gt;=</span> <span style="color:#00d;font-weight:bold">0</span>);
+</span></span><span style="display:flex;"><span>			<span style="color:#888">// check if this id still belongs to this row group
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>			<span style="color:#080;font-weight:bold">if</span> (idx_t(ids[pos]) <span style="color:#333">&lt;</span> row_group<span style="color:#333">-&gt;</span>start) {
+</span></span><span style="display:flex;"><span>				<span style="color:#888">// id is before row_group start -&gt; it does not
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>				<span style="color:#080;font-weight:bold">break</span>;
+</span></span><span style="display:flex;"><span>			}
+</span></span><span style="display:flex;"><span>			<span style="color:#080;font-weight:bold">if</span> (idx_t(ids[pos]) <span style="color:#333">&gt;=</span> row_group<span style="color:#333">-&gt;</span>start <span style="color:#333">+</span> row_group<span style="color:#333">-&gt;</span>count) {
+</span></span><span style="display:flex;"><span>				<span style="color:#888">// id is after row group end -&gt; it does not
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>				<span style="color:#080;font-weight:bold">break</span>;
+</span></span><span style="display:flex;"><span>			}
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		delete_count <span style="color:#333">+=</span> row_group<span style="color:#333">-&gt;</span>Delete(transaction, table, ids <span style="color:#333">+</span> start, pos <span style="color:#333">-</span> start);
+</span></span><span style="display:flex;"><span>	} <span style="color:#080;font-weight:bold">while</span> (pos <span style="color:#333">&lt;</span> count);
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">return</span> delete_count;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>但是我们并不需要实际删除该数据，我们所要做的仅仅是标记删除，即将对应数据的<code>delete id</code>标记为当前的<code>transaction id</code>, 表明被当前<code>transaction</code>删除。</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span><span style="color:#339;font-weight:bold">void</span> VersionDeleteState<span style="color:#333">::</span>Flush() {
+</span></span><span style="display:flex;"><span>	<span style="color:#888">// no need to flush if there is nothing to flush
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#080;font-weight:bold">if</span> (count <span style="color:#333">==</span> <span style="color:#00d;font-weight:bold">0</span>) {
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">return</span>;
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#888">// it is possible for delete statements to delete the same tuple multiple times when combined with a USING clause
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#888">// in the current_info-&gt;Delete, we check which tuples are actually deleted (excluding duplicate deletions)
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#888">// this is returned in the actual_delete_count
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#080;font-weight:bold">auto</span> actual_delete_count <span style="color:#333">=</span> current_info<span style="color:#333">-&gt;</span>Delete(transaction.transaction_id, rows, count);
+</span></span><span style="display:flex;"><span>	delete_count <span style="color:#333">+=</span> actual_delete_count;
+</span></span><span style="display:flex;"><span>	<span style="color:#888">// we actually delete some tuples: push the delete into the undo buffer
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#080;font-weight:bold">if</span> (transaction.transaction <span style="color:#333">&amp;&amp;</span> actual_delete_count <span style="color:#333">&gt;</span> <span style="color:#00d;font-weight:bold">0</span>) {
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// now push the delete into the undo buffer, but only if any deletes were actually performed
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		transaction.transaction<span style="color:#333">-&gt;</span>PushDelete(table, current_info, rows, actual_delete_count, base_row <span style="color:#333">+</span> chunk_row);
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	count <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">0</span>;
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#888">// delete according row
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>idx_t ChunkVectorInfo<span style="color:#333">::</span>Delete(transaction_t transaction_id, row_t rows[], idx_t count) {
+</span></span><span style="display:flex;"><span>	any_deleted <span style="color:#333">=</span> <span style="color:#007020">true</span>;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	idx_t deleted_tuples <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">0</span>;
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">for</span> (idx_t i <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">0</span>; i <span style="color:#333">&lt;</span> count; i<span style="color:#333">++</span>) {
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// already deleted
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		<span style="color:#080;font-weight:bold">if</span> (deleted[rows[i]] <span style="color:#333">==</span> transaction_id) {
+</span></span><span style="display:flex;"><span>			<span style="color:#080;font-weight:bold">continue</span>;
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// first check the chunk for conflicts
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		<span style="color:#080;font-weight:bold">if</span> (deleted[rows[i]] <span style="color:#333">!=</span> NOT_DELETED_ID) {
+</span></span><span style="display:flex;"><span>			<span style="color:#888">// tuple was already deleted by another transaction
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>			<span style="color:#080;font-weight:bold">throw</span> <span style="color:#06b;font-weight:bold">TransactionException</span>(<span style="background-color:#fff0f0">&#34;Conflict on tuple deletion!&#34;</span>);
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// delete
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		deleted[rows[i]] <span style="color:#333">=</span> transaction_id;
+</span></span><span style="display:flex;"><span>		rows[deleted_tuples] <span style="color:#333">=</span> rows[i];
+</span></span><span style="display:flex;"><span>		deleted_tuples<span style="color:#333">++</span>;
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">return</span> deleted_tuples;
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#888">// add undo buffer
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span><span style="color:#339;font-weight:bold">void</span> DuckTransaction<span style="color:#333">::</span>PushDelete(DataTable <span style="color:#333">&amp;</span>table, ChunkVectorInfo <span style="color:#333">*</span>vinfo, row_t rows[], idx_t count, idx_t base_row) {
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">auto</span> delete_info <span style="color:#333">=</span> <span style="color:#080;font-weight:bold">reinterpret_cast</span><span style="color:#333">&lt;</span>DeleteInfo <span style="color:#333">*&gt;</span>(
+</span></span><span style="display:flex;"><span>	    undo_buffer.CreateEntry(UndoFlags<span style="color:#333">::</span>DELETE_TUPLE, <span style="color:#080;font-weight:bold">sizeof</span>(DeleteInfo) <span style="color:#333">+</span> <span style="color:#080;font-weight:bold">sizeof</span>(row_t) <span style="color:#333">*</span> count));
+</span></span><span style="display:flex;"><span>	delete_info<span style="color:#333">-&gt;</span>vinfo <span style="color:#333">=</span> vinfo;
+</span></span><span style="display:flex;"><span>	delete_info<span style="color:#333">-&gt;</span>table <span style="color:#333">=</span> <span style="color:#333">&amp;</span>table;
+</span></span><span style="display:flex;"><span>	delete_info<span style="color:#333">-&gt;</span>count <span style="color:#333">=</span> count;
+</span></span><span style="display:flex;"><span>	delete_info<span style="color:#333">-&gt;</span>base_row <span style="color:#333">=</span> base_row;
+</span></span><span style="display:flex;"><span>	memcpy(delete_info<span style="color:#333">-&gt;</span>rows, rows, <span style="color:#080;font-weight:bold">sizeof</span>(row_t) <span style="color:#333">*</span> count);
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>从上面的代码中我们可以看到我们会将当前的<code>transaction id</code>赋值给<code>deleted</code>数组中对应的元素，同时往<code>UndoBuffer</code>中添加对应的<code>Entry</code>, 即将删除的行号写到<code>UndoBuffer</code>中。</p>
+<div style="text-align: center">
+<img src="/pic/duckdb/mvcc-delete-undo.png"/>
+</div>
+<p>同样的事务的提交为三个流程</p>
+<ol>
+<li>
+<p>storage commit</p>
+<p><code>storage commit</code> 在Insert中已经讲过了，值得注意的是，当我们扫描<code>Local Storage</code>时，我们会忽略被删除的数据, 因此被删除的数据不会被合并进table中.</p>
+</li>
+<li>
+<p>UndoBuffer Commit</p>
+</li>
+<li>
+<p>WAL 刷到磁盘中</p>
+<p>与Insert完全一致。</p>
+</li>
+</ol>
+<p>下面我们来分析一下<code>UndoBuffer Commit</code></p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span><span style="color:#080;font-weight:bold">case</span> UndoFlags<span style="color:#333">::</span><span style="color:#970;font-weight:bold">DELETE_TUPLE</span>: {
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// deletion:
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		<span style="color:#080;font-weight:bold">auto</span> info <span style="color:#333">=</span> <span style="color:#080;font-weight:bold">reinterpret_cast</span><span style="color:#333">&lt;</span>DeleteInfo <span style="color:#333">*&gt;</span>(data);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// write delete info into wal log
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		<span style="color:#080;font-weight:bold">if</span> (HAS_LOG <span style="color:#333">&amp;&amp;</span> <span style="color:#333">!</span>info<span style="color:#333">-&gt;</span>table<span style="color:#333">-&gt;</span>info<span style="color:#333">-&gt;</span>IsTemporary()) {
+</span></span><span style="display:flex;"><span>			WriteDelete(<span style="color:#333">*</span>info);
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// mark the tuples as committed
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		info<span style="color:#333">-&gt;</span>vinfo<span style="color:#333">-&gt;</span>CommitDelete(commit_id, info<span style="color:#333">-&gt;</span>rows, info<span style="color:#333">-&gt;</span>count);
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">break</span>;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>可以看到和Insert几乎一样</p>
+<ol>
+<li>将删除的行号写进LOG.</li>
+<li>将table中的对应的version info 由<code>transaction id</code> 更改为<code>commit id</code></li>
+</ol>
+<h2 id="update">Update</h2>
+<p>Update 的入口函数为<code>PhysicalUpdate::Sink</code>。</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span>SinkResultType PhysicalUpdate<span style="color:#333">::</span>Sink(ExecutionContext <span style="color:#333">&amp;</span>context, DataChunk <span style="color:#333">&amp;</span>chunk, OperatorSinkInput <span style="color:#333">&amp;</span>input) <span style="color:#080;font-weight:bold">const</span> {
+</span></span><span style="display:flex;"><span>	<span style="color:#888">//skip....
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		table.Update(tableref, context.client, row_ids, columns, update_chunk);
+</span></span><span style="display:flex;"><span>	<span style="color:#888">// skip...
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#339;font-weight:bold">void</span> DataTable<span style="color:#333">::</span>Update(TableCatalogEntry <span style="color:#333">&amp;</span>table, ClientContext <span style="color:#333">&amp;</span>context, Vector <span style="color:#333">&amp;</span>row_ids,
+</span></span><span style="display:flex;"><span>                       <span style="color:#080;font-weight:bold">const</span> vector<span style="color:#333">&lt;</span>PhysicalIndex<span style="color:#333">&gt;</span> <span style="color:#333">&amp;</span>column_ids, DataChunk <span style="color:#333">&amp;</span>updates) {
+</span></span><span style="display:flex;"><span>	<span style="color:#888">// skip...
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#080;font-weight:bold">auto</span> ids <span style="color:#333">=</span> FlatVector<span style="color:#333">::</span>GetData<span style="color:#333">&lt;</span>row_t<span style="color:#333">&gt;</span>(row_ids);
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">auto</span> first_id <span style="color:#333">=</span> FlatVector<span style="color:#333">::</span>GetValue<span style="color:#333">&lt;</span>row_t<span style="color:#333">&gt;</span>(row_ids, <span style="color:#00d;font-weight:bold">0</span>);
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">if</span> (first_id <span style="color:#333">&gt;=</span> MAX_ROW_ID) {
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// update is in transaction-local storage: push update into local storage
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		<span style="color:#080;font-weight:bold">auto</span> <span style="color:#333">&amp;</span>local_storage <span style="color:#333">=</span> LocalStorage<span style="color:#333">::</span>Get(context, db);
+</span></span><span style="display:flex;"><span>		local_storage.Update(<span style="color:#333">*</span><span style="color:#080;font-weight:bold">this</span>, row_ids, column_ids, updates);
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">return</span>;
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#888">// update is in the row groups
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#888">// we need to figure out for each id to which row group it belongs
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#888">// usually all (or many) ids belong to the same row group
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#888">// we iterate over the ids and check for every id if it belongs to the same row group as their predecessor
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	row_groups<span style="color:#333">-&gt;</span>Update(transaction, ids, column_ids, updates);
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>和delete一样，我们也会通过<code>row-id</code>区分更改的是<code>local storage</code>还是<code>table</code>,我们来看<code>Update</code>的具体逻辑。</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span><span style="color:#888">// RowGroup Update
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span><span style="color:#339;font-weight:bold">void</span> RowGroup<span style="color:#333">::</span>Update(TransactionData transaction, DataChunk <span style="color:#333">&amp;</span>update_chunk, row_t <span style="color:#333">*</span>ids, idx_t offset, idx_t count,
+</span></span><span style="display:flex;"><span>                      <span style="color:#080;font-weight:bold">const</span> vector<span style="color:#333">&lt;</span>PhysicalIndex<span style="color:#333">&gt;</span> <span style="color:#333">&amp;</span>column_ids) {
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">for</span> (idx_t i <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">0</span>; i <span style="color:#333">&lt;</span> column_ids.size(); i<span style="color:#333">++</span>) {
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">auto</span> column <span style="color:#333">=</span> column_ids[i];
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">auto</span> <span style="color:#333">&amp;</span>col_data <span style="color:#333">=</span> GetColumn(column.index);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">if</span> (offset <span style="color:#333">&gt;</span> <span style="color:#00d;font-weight:bold">0</span>) {
+</span></span><span style="display:flex;"><span>			Vector <span style="color:#06b;font-weight:bold">sliced_vector</span>(update_chunk.data[i], offset, offset <span style="color:#333">+</span> count);
+</span></span><span style="display:flex;"><span>			sliced_vector.Flatten(count);
+</span></span><span style="display:flex;"><span>			col_data.Update(transaction, column.index, sliced_vector, ids <span style="color:#333">+</span> offset, count);
+</span></span><span style="display:flex;"><span>		} <span style="color:#080;font-weight:bold">else</span> {
+</span></span><span style="display:flex;"><span>			col_data.Update(transaction, column.index, update_chunk.data[i], ids, count);
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span><span style="color:#888">// Column Update
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span><span style="color:#339;font-weight:bold">void</span> ColumnData<span style="color:#333">::</span>Update(TransactionData transaction, idx_t column_index, Vector <span style="color:#333">&amp;</span>update_vector, row_t <span style="color:#333">*</span>row_ids,
+</span></span><span style="display:flex;"><span>                        idx_t update_count) {
+</span></span><span style="display:flex;"><span>	lock_guard<span style="color:#333">&lt;</span>mutex<span style="color:#333">&gt;</span> update_guard(update_lock);
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">if</span> (<span style="color:#333">!</span>updates) {
+</span></span><span style="display:flex;"><span>		updates <span style="color:#333">=</span> make_uniq<span style="color:#333">&lt;</span>UpdateSegment<span style="color:#333">&gt;</span>(<span style="color:#333">*</span><span style="color:#080;font-weight:bold">this</span>);
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	Vector <span style="color:#06b;font-weight:bold">base_vector</span>(type);
+</span></span><span style="display:flex;"><span>	ColumnScanState state;
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">auto</span> fetch_count <span style="color:#333">=</span> Fetch(state, row_ids[<span style="color:#00d;font-weight:bold">0</span>], base_vector);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	base_vector.Flatten(fetch_count);
+</span></span><span style="display:flex;"><span>	updates<span style="color:#333">-&gt;</span>Update(transaction, column_index, update_vector, row_ids, update_count, base_vector);
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>从上面的代码我们可以得知，我们仍旧是先找需要Update的<code>RowGroup</code>, 再找需要Update的<code>ColumnData</code>,每一个ColumnData都有一个<code>UpdateSegment</code>，这里面存放着数据的历史版本。而其修改的流程与我们前面介绍的MVCC一致。</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span><span style="color:#333">/</span> <span style="color:#f00;background-color:#faa">@</span>brief Update the segment with the given transaction data
+</span></span><span style="display:flex;"><span><span style="color:#888">// @param transaction The transaction data
+</span></span></span><span style="display:flex;"><span><span style="color:#888">// @param column_index The index of the column to update
+</span></span></span><span style="display:flex;"><span><span style="color:#888">// @param update The vector containing the update data
+</span></span></span><span style="display:flex;"><span><span style="color:#888">// @param ids The row ids to update
+</span></span></span><span style="display:flex;"><span><span style="color:#888">// @param count The amount of ids to update
+</span></span></span><span style="display:flex;"><span><span style="color:#888">// @param base_data The original data of the column
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span><span style="color:#339;font-weight:bold">void</span> UpdateSegment<span style="color:#333">::</span>Update(TransactionData transaction, idx_t column_index, Vector <span style="color:#333">&amp;</span>update, row_t <span style="color:#333">*</span>ids, idx_t count,
+</span></span><span style="display:flex;"><span>                           Vector <span style="color:#333">&amp;</span>base_data) {
+</span></span><span style="display:flex;"><span>	<span style="color:#888">// obtain an exclusive lock
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#080;font-weight:bold">auto</span> write_lock <span style="color:#333">=</span> lock.GetExclusiveLock();
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	update.Flatten(count);
+</span></span><span style="display:flex;"><span>	<span style="color:#888">// skip....
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#080;font-weight:bold">if</span> (root<span style="color:#333">-&gt;</span>info[vector_index]) {
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// there is already a version here, check if there are any conflicts and search for the node that belongs to
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		<span style="color:#888">// this transaction in the version chain
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		<span style="color:#080;font-weight:bold">auto</span> base_info <span style="color:#333">=</span> root<span style="color:#333">-&gt;</span>info[vector_index]<span style="color:#333">-&gt;</span>info.get();
+</span></span><span style="display:flex;"><span>		
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">auto</span> node <span style="color:#333">=</span> base_info<span style="color:#333">-&gt;</span>next;
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">while</span> (node) {
+</span></span><span style="display:flex;"><span>			<span style="color:#080;font-weight:bold">if</span> (node<span style="color:#333">-&gt;</span>version_number <span style="color:#333">==</span> transaction.transaction_id) {
+</span></span><span style="display:flex;"><span>				<span style="color:#888">// it has! use this node
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>				<span style="color:#080;font-weight:bold">break</span>;
+</span></span><span style="display:flex;"><span>			}
+</span></span><span style="display:flex;"><span>			node <span style="color:#333">=</span> node<span style="color:#333">-&gt;</span>next;
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>			node<span style="color:#333">-&gt;</span>segment <span style="color:#333">=</span> <span style="color:#080;font-weight:bold">this</span>;
+</span></span><span style="display:flex;"><span>			node<span style="color:#333">-&gt;</span>vector_index <span style="color:#333">=</span> vector_index;
+</span></span><span style="display:flex;"><span>			node<span style="color:#333">-&gt;</span>N <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">0</span>;
+</span></span><span style="display:flex;"><span>			node<span style="color:#333">-&gt;</span>column_index <span style="color:#333">=</span> column_index;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>			<span style="color:#888">// insert the new node into the chain
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>			node<span style="color:#333">-&gt;</span>next <span style="color:#333">=</span> base_info<span style="color:#333">-&gt;</span>next;
+</span></span><span style="display:flex;"><span>			<span style="color:#080;font-weight:bold">if</span> (node<span style="color:#333">-&gt;</span>next) {
+</span></span><span style="display:flex;"><span>				node<span style="color:#333">-&gt;</span>next<span style="color:#333">-&gt;</span>prev <span style="color:#333">=</span> node;
+</span></span><span style="display:flex;"><span>			}
+</span></span><span style="display:flex;"><span>			node<span style="color:#333">-&gt;</span>prev <span style="color:#333">=</span> base_info;
+</span></span><span style="display:flex;"><span>			base_info<span style="color:#333">-&gt;</span>next <span style="color:#333">=</span> transaction.transaction <span style="color:#333">?</span> <span style="color:#970;font-weight:bold">node</span> : <span style="color:#080;font-weight:bold">nullptr</span>;
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// now we are going to perform the merge
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		<span style="color:#888">// because we found this txn has done update before
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		<span style="color:#888">// so we just merge the update into the node
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		merge_update_function(base_info, base_data, node, update, ids, count, sel);
+</span></span><span style="display:flex;"><span>	} <span style="color:#080;font-weight:bold">else</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// there is no version info yet: create the top level update info and fill it with the updates
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		<span style="color:#080;font-weight:bold">auto</span> result <span style="color:#333">=</span> make_uniq<span style="color:#333">&lt;</span>UpdateNodeData<span style="color:#333">&gt;</span>();
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		result<span style="color:#333">-&gt;</span>info <span style="color:#333">=</span> make_uniq<span style="color:#333">&lt;</span>UpdateInfo<span style="color:#333">&gt;</span>();
+</span></span><span style="display:flex;"><span>		result<span style="color:#333">-&gt;</span>tuples <span style="color:#333">=</span> make_unsafe_uniq_array<span style="color:#333">&lt;</span>sel_t<span style="color:#333">&gt;</span>(STANDARD_VECTOR_SIZE);
+</span></span><span style="display:flex;"><span>		result<span style="color:#333">-&gt;</span>tuple_data <span style="color:#333">=</span> make_unsafe_uniq_array<span style="color:#333">&lt;</span>data_t<span style="color:#333">&gt;</span>(STANDARD_VECTOR_SIZE <span style="color:#333">*</span> type_size);
+</span></span><span style="display:flex;"><span>		result<span style="color:#333">-&gt;</span>info<span style="color:#333">-&gt;</span>tuples <span style="color:#333">=</span> result<span style="color:#333">-&gt;</span>tuples.get();
+</span></span><span style="display:flex;"><span>		result<span style="color:#333">-&gt;</span>info<span style="color:#333">-&gt;</span>tuple_data <span style="color:#333">=</span> result<span style="color:#333">-&gt;</span>tuple_data.get();
+</span></span><span style="display:flex;"><span>		result<span style="color:#333">-&gt;</span>info<span style="color:#333">-&gt;</span>version_number <span style="color:#333">=</span> TRANSACTION_ID_START <span style="color:#333">-</span> <span style="color:#00d;font-weight:bold">1</span>;
+</span></span><span style="display:flex;"><span>		result<span style="color:#333">-&gt;</span>info<span style="color:#333">-&gt;</span>column_index <span style="color:#333">=</span> column_index;
+</span></span><span style="display:flex;"><span>		InitializeUpdateInfo(<span style="color:#333">*</span>result<span style="color:#333">-&gt;</span>info, ids, sel, count, vector_index, vector_offset);
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// skip...
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		InitializeUpdateInfo(<span style="color:#333">*</span>transaction_node, ids, sel, count, vector_index, vector_offset);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// we write the updates in the update node data, and write the updates in the info
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		initialize_update_function(transaction_node, base_data, result<span style="color:#333">-&gt;</span>info.get(), update, sel);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		result<span style="color:#333">-&gt;</span>info<span style="color:#333">-&gt;</span>next <span style="color:#333">=</span> transaction.transaction <span style="color:#333">?</span> <span style="color:#970;font-weight:bold">transaction_node</span> : <span style="color:#080;font-weight:bold">nullptr</span>;
+</span></span><span style="display:flex;"><span>		result<span style="color:#333">-&gt;</span>info<span style="color:#333">-&gt;</span>prev <span style="color:#333">=</span> <span style="color:#080;font-weight:bold">nullptr</span>;
+</span></span><span style="display:flex;"><span>		transaction_node<span style="color:#333">-&gt;</span>next <span style="color:#333">=</span> <span style="color:#080;font-weight:bold">nullptr</span>;
+</span></span><span style="display:flex;"><span>		transaction_node<span style="color:#333">-&gt;</span>prev <span style="color:#333">=</span> result<span style="color:#333">-&gt;</span>info.get();
+</span></span><span style="display:flex;"><span>		transaction_node<span style="color:#333">-&gt;</span>column_index <span style="color:#333">=</span> column_index;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		transaction_node<span style="color:#333">-&gt;</span>Verify();
+</span></span><span style="display:flex;"><span>		result<span style="color:#333">-&gt;</span>info<span style="color:#333">-&gt;</span>Verify();
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		root<span style="color:#333">-&gt;</span>info[vector_index] <span style="color:#333">=</span> std<span style="color:#333">::</span>move(result);
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>代码很长，但是实际干的事情就是一件事，将修改前的数据保存下来做成一个<code>UndoBuffer</code>的Entry写入<code>UndoBuffer</code>，然后直接本地修改，即<code>base_info</code>更新数据，然后将Entry插入到<code>base_info</code>的next。</p>
+<div style="text-align: center">
+<img src="/pic/duckdb/mvcc-undo-update.png"/>
+</div>
+<p>最后相同的流程
+同样的事务的提交为三个流程</p>
+<ol>
+<li>storage commit</li>
+<li>UndoBuffer Commit</li>
+<li>WAL 刷到磁盘中</li>
+</ol>
+<p>不同的只有<code>UndoBuffer Commit</code></p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span><span style="color:#080;font-weight:bold">case</span> UndoFlags<span style="color:#333">::</span><span style="color:#970;font-weight:bold">UPDATE_TUPLE</span>: {
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// update:
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		<span style="color:#080;font-weight:bold">auto</span> info <span style="color:#333">=</span> <span style="color:#080;font-weight:bold">reinterpret_cast</span><span style="color:#333">&lt;</span>UpdateInfo <span style="color:#333">*&gt;</span>(data);
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">if</span> (HAS_LOG <span style="color:#333">&amp;&amp;</span> <span style="color:#333">!</span>info<span style="color:#333">-&gt;</span>segment<span style="color:#333">-&gt;</span>column_data.GetTableInfo().IsTemporary()) {
+</span></span><span style="display:flex;"><span>			WriteUpdate(<span style="color:#333">*</span>info);
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		info<span style="color:#333">-&gt;</span>version_number <span style="color:#333">=</span> commit_id;
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">break</span>;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>同样将哪些column变了，写入到WAL中。然后将<code>Update Info</code>的<code>version number</code>从<code>transaction id</code>变为<code>commit id</code>,表明提交成功。</p>
+<h2 id="scan">Scan</h2>
+<p>最后我们来讲一下Scan，有了前面的铺垫，Scan就相对容易一些了。
+Scan的入口函数为<code>PhysicalTableScan::GetData</code></p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span>SourceResultType PhysicalTableScan<span style="color:#333">::</span>GetData(ExecutionContext <span style="color:#333">&amp;</span>context, DataChunk <span style="color:#333">&amp;</span>chunk,
+</span></span><span style="display:flex;"><span>                                            OperatorSourceInput <span style="color:#333">&amp;</span>input) <span style="color:#080;font-weight:bold">const</span> {
+</span></span><span style="display:flex;"><span>	D_ASSERT(<span style="color:#333">!</span>column_ids.empty());
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">auto</span> <span style="color:#333">&amp;</span>gstate <span style="color:#333">=</span> input.global_state.Cast<span style="color:#333">&lt;</span>TableScanGlobalSourceState<span style="color:#333">&gt;</span>();
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">auto</span> <span style="color:#333">&amp;</span>state <span style="color:#333">=</span> input.local_state.Cast<span style="color:#333">&lt;</span>TableScanLocalSourceState<span style="color:#333">&gt;</span>();
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	TableFunctionInput <span style="color:#06b;font-weight:bold">data</span>(bind_data.get(), state.local_state.get(), gstate.global_state.get());
+</span></span><span style="display:flex;"><span>	function.function(context.client, data, chunk);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">return</span> chunk.size() <span style="color:#333">==</span> <span style="color:#00d;font-weight:bold">0</span> <span style="color:#333">?</span> SourceResultType<span style="color:#333">::</span><span style="color:#970;font-weight:bold">FINISHED</span> : SourceResultType<span style="color:#333">::</span>HAVE_MORE_OUTPUT;
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#080;font-weight:bold">static</span> <span style="color:#339;font-weight:bold">void</span> <span style="color:#06b;font-weight:bold">TableScanFunc</span>(ClientContext <span style="color:#333">&amp;</span>context, TableFunctionInput <span style="color:#333">&amp;</span>data_p, DataChunk <span style="color:#333">&amp;</span>output) {
+</span></span><span style="display:flex;"><span>	<span style="color:#888">// skip...
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#080;font-weight:bold">do</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">if</span>(<span style="color:#888">/*skip....*/</span>) {
+</span></span><span style="display:flex;"><span>		} <span style="color:#080;font-weight:bold">else</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#888">// scan!!
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>			storage.Scan(transaction, output, state.scan_state);
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// skip...
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	} <span style="color:#080;font-weight:bold">while</span> (<span style="color:#007020">true</span>);
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#339;font-weight:bold">void</span> DataTable<span style="color:#333">::</span>Scan(DuckTransaction <span style="color:#333">&amp;</span>transaction, DataChunk <span style="color:#333">&amp;</span>result, TableScanState <span style="color:#333">&amp;</span>state) {
+</span></span><span style="display:flex;"><span>	<span style="color:#888">// scan the persistent segments
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#888">// table state is the the presistent data
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#080;font-weight:bold">if</span> (state.table_state.Scan(transaction, result)) {
+</span></span><span style="display:flex;"><span>		D_ASSERT(result.size() <span style="color:#333">&gt;</span> <span style="color:#00d;font-weight:bold">0</span>);
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">return</span>;
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#888">// scan the transaction-local segments
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>
+</span></span><span style="display:flex;"><span>	<span style="color:#888">// this was added to the local storage
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#080;font-weight:bold">auto</span> <span style="color:#333">&amp;</span>local_storage <span style="color:#333">=</span> LocalStorage<span style="color:#333">::</span>Get(transaction);
+</span></span><span style="display:flex;"><span>	local_storage.Scan(state.local_state, state.GetColumnIds(), result);
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>从代码中我们可以看到Scan的流程为先扫描<code>Table</code>再扫描<code>Local Storage</code>。 对于Table的扫描，同样也是一个rowGroup，一个rowGroup来扫描的。我们主要看一下对<code>RowGroup</code>的扫描。</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span><span style="color:#080;font-weight:bold">template</span> <span style="color:#333">&lt;</span>TableScanType TYPE<span style="color:#333">&gt;</span>
+</span></span><span style="display:flex;"><span><span style="color:#339;font-weight:bold">void</span> RowGroup<span style="color:#333">::</span>TemplatedScan(TransactionData transaction, CollectionScanState <span style="color:#333">&amp;</span>state, DataChunk <span style="color:#333">&amp;</span>result) {
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">auto</span> table_filters <span style="color:#333">=</span> state.GetFilters();
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">const</span> <span style="color:#080;font-weight:bold">auto</span> <span style="color:#333">&amp;</span>column_ids <span style="color:#333">=</span> state.GetColumnIds();
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">auto</span> adaptive_filter <span style="color:#333">=</span> state.GetAdaptiveFilter();
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">while</span> (<span style="color:#007020">true</span>) {
+</span></span><span style="display:flex;"><span>		
+</span></span><span style="display:flex;"><span>		idx_t current_row <span style="color:#333">=</span> state.vector_index <span style="color:#333">*</span> STANDARD_VECTOR_SIZE;
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// each time scan entire vector, unless remaining less than STANDARD_VECTOR_SIZE
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		<span style="color:#080;font-weight:bold">auto</span> max_count <span style="color:#333">=</span> MinValue<span style="color:#333">&lt;</span>idx_t<span style="color:#333">&gt;</span>(STANDARD_VECTOR_SIZE, state.max_row_group_row <span style="color:#333">-</span> current_row);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// second, scan the version chunk manager to figure out which tuples to load for this transaction
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>		idx_t count;
+</span></span><span style="display:flex;"><span>		SelectionVector <span style="color:#06b;font-weight:bold">valid_sel</span>(STANDARD_VECTOR_SIZE);
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">if</span> (TYPE <span style="color:#333">==</span> TableScanType<span style="color:#333">::</span>TABLE_SCAN_REGULAR) {
+</span></span><span style="display:flex;"><span>			<span style="color:#888">// get what is needed to scan in this vector
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>			<span style="color:#888">// may be it&#39;s deleted by this transaction or inserted by other transaction
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>			count <span style="color:#333">=</span> state.row_group<span style="color:#333">-&gt;</span>GetSelVector(transaction, state.vector_index, valid_sel, max_count);
+</span></span><span style="display:flex;"><span>			<span style="color:#080;font-weight:bold">if</span> (count <span style="color:#333">==</span> <span style="color:#00d;font-weight:bold">0</span>) {
+</span></span><span style="display:flex;"><span>				<span style="color:#888">// nothing to scan for this vector, skip the entire vector
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>				<span style="color:#888">// increase state.vector_idx, and make every column skip ${count} vector data
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>				NextVector(state);
+</span></span><span style="display:flex;"><span>				<span style="color:#080;font-weight:bold">continue</span>;
+</span></span><span style="display:flex;"><span>			}
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>			<span style="color:#080;font-weight:bold">if</span> (count <span style="color:#333">==</span> <span style="color:#00d;font-weight:bold">0</span>) {
+</span></span><span style="display:flex;"><span>				<span style="color:#888">// nothing to scan for this vector, skip the entire vector
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>				NextVector(state);
+</span></span><span style="display:flex;"><span>				<span style="color:#080;font-weight:bold">continue</span>;
+</span></span><span style="display:flex;"><span>			}
+</span></span><span style="display:flex;"><span>		} <span style="color:#080;font-weight:bold">else</span> {
+</span></span><span style="display:flex;"><span>			count <span style="color:#333">=</span> max_count;
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		<span style="color:#888">// skip...
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	}
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>因为代码很长，我们分段来看，首先上面的代码中最重要的就是</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span>state.row_group<span style="color:#333">-&gt;</span>GetSelVector(transaction, state.vector_index, valid_sel, max_count);
+</span></span></code></pre></div><p>这句的含义是，确定这个<code>rowGroup</code>有哪些是我们这个<code>transaction</code>可见的，因为有些数据可能是被其他<code>transaction</code>添加的，对于我们来说应该是不可见的。我们可以通过<code>insert-id</code>和<code>delete-id</code>来进行判断</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">static</span> <span style="color:#339;font-weight:bold">bool</span> <span style="color:#06b;font-weight:bold">UseInsertedVersion</span>(transaction_t start_time, transaction_t transaction_id, transaction_t id) {
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">return</span> id <span style="color:#333">&lt;</span> start_time <span style="color:#333">||</span> id <span style="color:#333">==</span> transaction_id;
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">static</span> <span style="color:#339;font-weight:bold">bool</span> <span style="color:#06b;font-weight:bold">UseDeletedVersion</span>(transaction_t start_time, transaction_t transaction_id, transaction_t id) {
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">return</span> <span style="color:#333">!</span>UseInsertedVersion(start_time, transaction_id, id);
+</span></span><span style="display:flex;"><span>	}
+</span></span></code></pre></div><p>对于Insert,如果它的Commit时间小于start time 或者 它就是这个事务添加的。那么应该是可见的。
+对于Delete,如果它的Commit时间大于start time 或者 它不是这个事务删除的。那么它不应该被删除，即应该是可见的。</p>
+<p>在确定了哪些tuple是可见后，我们就应该尝试去读取数据了。</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span><span style="color:#080;font-weight:bold">if</span> (count <span style="color:#333">==</span> max_count <span style="color:#333">&amp;&amp;</span> <span style="color:#333">!</span>table_filters) {
+</span></span><span style="display:flex;"><span>	<span style="color:#888">// scan all vectors completely: full scan without deletions or table filters
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#080;font-weight:bold">for</span> (idx_t i <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">0</span>; i <span style="color:#333">&lt;</span> column_ids.size(); i<span style="color:#333">++</span>) {
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">const</span> <span style="color:#080;font-weight:bold">auto</span> <span style="color:#333">&amp;</span>column <span style="color:#333">=</span> column_ids[i];
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">if</span> (column <span style="color:#333">==</span> COLUMN_IDENTIFIER_ROW_ID) {
+</span></span><span style="display:flex;"><span>			<span style="color:#888">// scan row id
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>			D_ASSERT(result.data[i].GetType().InternalType() <span style="color:#333">==</span> ROW_TYPE);
+</span></span><span style="display:flex;"><span>			result.data[i].Sequence(<span style="color:#080;font-weight:bold">this</span><span style="color:#333">-&gt;</span>start <span style="color:#333">+</span> current_row, <span style="color:#00d;font-weight:bold">1</span>, count);
+</span></span><span style="display:flex;"><span>		} <span style="color:#080;font-weight:bold">else</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#080;font-weight:bold">auto</span> <span style="color:#333">&amp;</span>col_data <span style="color:#333">=</span> GetColumn(column);
+</span></span><span style="display:flex;"><span>			<span style="color:#080;font-weight:bold">if</span> (TYPE <span style="color:#333">!=</span> TableScanType<span style="color:#333">::</span>TABLE_SCAN_REGULAR) {
+</span></span><span style="display:flex;"><span>				col_data.ScanCommitted(state.vector_index, state.column_scans[i], result.data[i], ALLOW_UPDATES);
+</span></span><span style="display:flex;"><span>			} <span style="color:#080;font-weight:bold">else</span> {
+</span></span><span style="display:flex;"><span>				col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i]);
+</span></span><span style="display:flex;"><span>			}
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>如果全部可见，且没有filter，那么我们直接对每一个column进行读取。</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span><span style="color:#080;font-weight:bold">template</span> <span style="color:#333">&lt;</span><span style="color:#339;font-weight:bold">bool</span> SCAN_COMMITTED, <span style="color:#339;font-weight:bold">bool</span> ALLOW_UPDATES<span style="color:#333">&gt;</span>
+</span></span><span style="display:flex;"><span>idx_t ColumnData<span style="color:#333">::</span>ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState <span style="color:#333">&amp;</span>state, Vector <span style="color:#333">&amp;</span>result) {
+</span></span><span style="display:flex;"><span>	<span style="color:#888">// we have got data in the table into the result
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#888">// the total count in this result is scan count
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#080;font-weight:bold">auto</span> scan_count <span style="color:#333">=</span> ScanVector(state, result, STANDARD_VECTOR_SIZE);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	lock_guard<span style="color:#333">&lt;</span>mutex<span style="color:#333">&gt;</span> update_guard(update_lock);
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">if</span> (updates) {
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">if</span> (<span style="color:#333">!</span>ALLOW_UPDATES <span style="color:#333">&amp;&amp;</span> updates<span style="color:#333">-&gt;</span>HasUncommittedUpdates(vector_index)) {
+</span></span><span style="display:flex;"><span>			<span style="color:#080;font-weight:bold">throw</span> <span style="color:#06b;font-weight:bold">TransactionException</span>(<span style="background-color:#fff0f0">&#34;Cannot create index with outstanding updates&#34;</span>);
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		result.Flatten(scan_count);
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">if</span> (SCAN_COMMITTED) {
+</span></span><span style="display:flex;"><span>			updates<span style="color:#333">-&gt;</span>FetchCommitted(vector_index, result);
+</span></span><span style="display:flex;"><span>		} <span style="color:#080;font-weight:bold">else</span> {
+</span></span><span style="display:flex;"><span>			updates<span style="color:#333">-&gt;</span>FetchUpdates(transaction, vector_index, result);
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">return</span> scan_count;
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#888">// MVCC read
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span><span style="color:#080;font-weight:bold">template</span> <span style="color:#333">&lt;</span><span style="color:#080;font-weight:bold">class</span> <span style="color:#b06;font-weight:bold">T</span><span style="color:#333">&gt;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">static</span> <span style="color:#339;font-weight:bold">void</span> UpdatesForTransaction(UpdateInfo <span style="color:#333">*</span>current, transaction_t start_time, transaction_t transaction_id,
+</span></span><span style="display:flex;"><span>	                                  T <span style="color:#333">&amp;&amp;</span>callback) {
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">while</span> (current) {
+</span></span><span style="display:flex;"><span>			<span style="color:#080;font-weight:bold">if</span> (current<span style="color:#333">-&gt;</span>version_number <span style="color:#333">&gt;</span> start_time <span style="color:#333">&amp;&amp;</span> current<span style="color:#333">-&gt;</span>version_number <span style="color:#333">!=</span> transaction_id) {
+</span></span><span style="display:flex;"><span>				<span style="color:#888">// these tuples were either committed AFTER this transaction started or are not committed yet, use
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>				<span style="color:#888">// tuples stored in this version
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>				<span style="color:#888">// update the coressponding data
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>				callback(current);
+</span></span><span style="display:flex;"><span>			}
+</span></span><span style="display:flex;"><span>			current <span style="color:#333">=</span> current<span style="color:#333">-&gt;</span>next;
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>上面的代码先读取这个column的原始数据，然后看它有没有Update，如果有的话，就根据我们之前描述的MVCC的方式进行更新。</p>
+<p>如果有Filter的话，会根据Filter条件先进行过滤，再根据过滤后的数据去获得相应的ColumnData，方式与上面描述的一样。</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C++" data-lang="C++"><span style="display:flex;"><span><span style="color:#080;font-weight:bold">if</span> (table_filters) {
+</span></span><span style="display:flex;"><span>	D_ASSERT(adaptive_filter);
+</span></span><span style="display:flex;"><span>	D_ASSERT(ALLOW_UPDATES);
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">for</span> (idx_t i <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">0</span>; i <span style="color:#333">&lt;</span> table_filters<span style="color:#333">-&gt;</span>filters.size(); i<span style="color:#333">++</span>) {
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">auto</span> tf_idx <span style="color:#333">=</span> adaptive_filter<span style="color:#333">-&gt;</span>permutation[i];
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">auto</span> col_idx <span style="color:#333">=</span> column_ids[tf_idx];
+</span></span><span style="display:flex;"><span>		<span style="color:#080;font-weight:bold">auto</span> <span style="color:#333">&amp;</span>col_data <span style="color:#333">=</span> GetColumn(col_idx);
+</span></span><span style="display:flex;"><span>		col_data.Select(transaction, state.vector_index, state.column_scans[tf_idx], result.data[tf_idx],sel, approved_tuple_count, <span style="color:#333">*</span>table_filters<span style="color:#333">-&gt;</span>filters[tf_idx]);
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#080;font-weight:bold">for</span> (<span style="color:#080;font-weight:bold">auto</span> <span style="color:#333">&amp;</span><span style="color:#970;font-weight:bold">table_filter</span> : table_filters<span style="color:#333">-&gt;</span>filters) {
+</span></span><span style="display:flex;"><span>		result.data[table_filter.first].Slice(sel, approved_tuple_count);
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#888">//! Now we use the selection vector to fetch data for the other columns.
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span><span style="color:#080;font-weight:bold">for</span> (idx_t i <span style="color:#333">=</span> <span style="color:#00d;font-weight:bold">0</span>; i <span style="color:#333">&lt;</span> column_ids.size(); i<span style="color:#333">++</span>) {
+</span></span><span style="display:flex;"><span>	<span style="color:#888">// we fetch column data for all columns that were not used for filtered
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	<span style="color:#888">// skip...
+</span></span></span><span style="display:flex;"><span><span style="color:#888"></span>	col_data.FilterScanCommitted(state.vector_index, state.column_scans[i], result.data[i], sel,approved_tuple_count, ALLOW_UPDATES);
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>最后将读取的数据全部返回。</p>
+<h3 id="总结">总结</h3>
+<p>MVCC与增删改查的东西确实太多了，很难面面俱到，因此这篇文章也只能说把大体的轮廓介绍了一下。如果想知道全部的细节，还是需要去阅读源码。如果有任何不理解，或者觉得描述的不太清晰的，请随时留言提出。</p>
+
+</div>
+<div class="tags">
+<div class="taxosfloating_left">
+<p>Categories</p>
+</div>
+<div class="termsfloating_right">
+<p>
+<a href="/categories/database/">database</a>
+<a href="/categories/duckdb/">duckdb</a>
+</p>
+</div>
+<div class="clearit"></div>
+</div>
+<div id="disqus_thread"></div>
+<script type="text/javascript">
+(function() {
+
+
+if (window.location.hostname == "localhost")
+  return;
+var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+var disqus_shortname = 'tangdh-life';
+dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+(document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to load the comments.</noscript>
+
+
+</article>
+</div>
+</main><script src="/js/dark-mode.js"></script>
+
+</body>
+</html>

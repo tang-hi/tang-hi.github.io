@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><script src="/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=livereload" data-no-instant defer></script>
+<meta charset="UTF-8">
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-D5M6G40M25"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-D5M6G40M25');
+</script>
+<meta name="baidu-site-verification" content="codeva-vs6hGikUak" />
+<title>有趣的知识 -- CPU利用率，延迟，吞吐量之间的关系 | Don&#39;t Panic</title>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="generator" content="Hugo 0.123.7">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="通过数学的方式确定CPU利用率，延迟，吞吐量之间的关系">
+<link rel="stylesheet" type="text/css" media="screen" href="/css/normalize.css" />
+<link rel="stylesheet" type="text/css" media="screen" href="/css/main.css" />
+<link rel="stylesheet" type="text/css" media="screen" href="/css/all.css" /><link rel="stylesheet" href="/css/katex.css" crossorigin="anonymous">
+<script defer src="/js/katex.js"  integrity="sha384-PFWG8XW41D5NzhNv5FegM1CUkw9nNLdWug8DuwnUoNEVop9n5frjcnbtsZtxTNjw" crossorigin="anonymous"></script>
+<script defer src="/js/auto-render.js" integrity="sha384-EN2q+JG5/3Z8gD7hT5WZqq+W+9wQR4P3IezfuZmGG5RkNXaaaks85seDJO7WkZlY" crossorigin="anonymous" onload="renderMathInElement(document.body);"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() { renderMathInElement(document.body, { delimiters: [ {left: "$$", right: "$$", display: true}, {left: "$", right: "$", display: false} ] }); });
+</script>
+
+
+
+
+<meta property="og:title" content="有趣的知识 -- CPU利用率，延迟，吞吐量之间的关系" />
+<meta property="og:description" content="通过数学的方式确定CPU利用率，延迟，吞吐量之间的关系" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="http://localhost:1313/posts/interesting/queue-theory/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-11-13T00:00:00+00:00" />
+<meta property="article:modified_time" content="2023-11-13T00:00:00+00:00" />
+
+<meta name="twitter:card" content="summary"/><meta name="twitter:title" content="有趣的知识 -- CPU利用率，延迟，吞吐量之间的关系"/>
+<meta name="twitter:description" content="通过数学的方式确定CPU利用率，延迟，吞吐量之间的关系"/>
+
+<meta itemprop="name" content="有趣的知识 -- CPU利用率，延迟，吞吐量之间的关系">
+<meta itemprop="description" content="通过数学的方式确定CPU利用率，延迟，吞吐量之间的关系"><meta itemprop="datePublished" content="2023-11-13T00:00:00+00:00" />
+<meta itemprop="dateModified" content="2023-11-13T00:00:00+00:00" />
+<meta itemprop="wordCount" content="366">
+<meta itemprop="keywords" content="" />
+</head>
+<body>
+<header>
+<div id="avatar">
+<a href="http://localhost:1313/"><img src="/avatar.jpeg" alt="Don&#39;t Panic"></a>
+</div>
+<div id="titletext">
+<h2 id="titleonly"><a href="http://localhost:1313/">Don&#39;t Panic</a></h2>
+</div>
+<div id="title-social">
+<div id="social">
+<nav><ul>
+<li><a href="https://github.com/tang-hi"><i title="Github" class="icons fab fa-github"></i></a></li>
+<li><a href="mailto:tangdhcs@gmail.com"><i title="Email" class="icons fas fa-envelope"></i></a></li>
+<li><a href="https://twitter.com/TangDh"><i title="Twitter" class="icons fab fa-twitter"></i></a></li>
+<li><a href="/index.xml"><i title="RSS" class="icons fas fa-rss"></i></a></li>
+<li><a><i title="Switch Dark Mode" class="dark-mode icons fas fa-moon"></i></a></li>
+</ul></nav>
+</div>
+</div>
+<div id="mainmenu">
+<nav>
+<ul>
+<li><a href="/">Home</a></li>
+<li><a href="/posts">All Posts</a></li>
+<li><a href="/about">About</a></li>
+<li><a href="/categories">Categories</a></li>
+</ul>
+</nav>
+</div>
+</header>
+<main>
+<div class="post">
+<article>
+<div class="post-header">
+<div class="meta">
+<div class="date">
+<span class="day">13</span>
+<span class="rest">Nov 2023</span>
+</div>
+</div>
+<div class="matter">
+<h1 class="title">有趣的知识 -- CPU利用率，延迟，吞吐量之间的关系</h1>
+<p class="post-meta">
+<span class="post-meta">
+
+&nbsp;<i class="fas fa-clock"></i>&nbsp;2&nbsp;minutes
+
+
+ 
+&nbsp;| &nbsp;
+
+<i class="fas fa-book"></i>&nbsp;366&nbsp;words
+
+
+
+
+</span>
+
+</p>
+</div>
+</div>
+<div class="markdown">
+<p>本文从排队论的角度出发分析CPU利用率，延迟和吞吐量之间的关系，这篇文章大量参考<a href="https://blog.betacat.io/post/2023/05/explain-latency-and-utilization-using-queueing-theory/" target="_blank">喵叔的文章</a>, <a href="https://www.youtube.com/watch?v=Hda5tMrLJqc" target="_blank">油管视频</a>,
+本质上只是简单的复述，作为我自己学习的整理。</p>
+<h2 id="cpu利用率和延迟之间的关系">CPU利用率和延迟之间的关系</h2>
+<p>做在线服务的时候，我们经常会给CPU利用率设置一个阈值，如果超过了这个阈值，我们会对服务扩容。这个阈值到底应该如何选择，为什么当CPU利用率到达了50%(<strong>意味着它有一半时间是空闲的</strong>),我们就需要对其进行扩容？ 要回答这些问题就意味着，我们不能仅仅对CPU和延迟有一个感性的认识，而应该有一个定量的描述。</p>
+<h3 id="1-littles-lawhttpsenwikipediaorgwikilittle27s_law">1. <a href="https://en.wikipedia.org/wiki/Little%27s_law" target="_blank">Little’s Law</a></h3>
+<p>Little&rsquo;s Law 是排队论中的一个重要定律，由 John D. C. Little 在 1961 年提出。该定律指出，在一个系统中，平均的顾客数等于平均的到达率乘以平均的服务时间。
+换算到计算机中即系统中的平均请求数等于单位时间内的请求数量乘以平均的处理时间，其公式可以表示为</p>
+<p>$$
+L = \lambda W
+$$</p>
+<p>其中:</p>
+<p>$L$ : 系统中的平均请求数,即当前正在处理以及待处理的请求</p>
+<p>$\lambda$ : 单位时间内到达的请求数,即<strong>QPS</strong></p>
+<p>$W$ : 单个请求的平均处理时间, 即延迟</p>
+<h3 id="2-模型构建">2. 模型构建</h3>
+<p>在得知上述定理后，我们可以对我们的服务进行一个简单的模型构建<a href="https://zh.wikipedia.org/zh-cn/M/M/1" target="_blank">M/M/1模型</a></p>
+<ol>
+<li>我们只有一个服务器</li>
+<li>服务器一次只处理一个请求</li>
+<li>请求的到来服从泊松分布</li>
+<li>请求的处理时间服从泊松分布</li>
+</ol>
+<p>因为整个服务是动态的，每时每刻待处理的请求数量都是变化的，但是它们都服从马尔科夫链，其中每个状态的变化都是一个泊松过程。</p>
+<p>因此如果当前状态为 $i$ , 那么它的上一个状态为 $ j $ ( $ i \pm 1 $ ), 由于整个系统处于平稳的状态，所以离开状态的速率等于进入状态的速率, 即</p>
+<p>$$ \lambda * P(X=i) = \mu * P(X=j) $$</p>
+<p>其中:</p>
+<p>$P(X=i)$ 代表状态$i$的概率，即请求数量为$i$的概率</p>
+<p>$P(X=j)$ 代表状态$j$的概率，即请求数量为$j$的概率</p>
+<p>$\lambda$ 代表QPS</p>
+<p>$\mu$ 代表单位时间内处理请求的数量</p>
+<p>根据上面的式子，我们可以得到如下的递推式</p>
+<p>$$
+\lambda * P(X=0) = \mu * P(X=1)\newline
+\lambda * P(X=1) = \mu * P(X=2)\newline
+\lambda * P(X=2) = \mu * P(X=3)\newline
+.\newline
+.\newline
+$$</p>
+<p>我们可以从上述公式推导出</p>
+<p>$$
+P(X=i) = (\frac{\lambda}{\mu})^n * P(X=0)
+$$</p>
+<p>又由于所有的概率之和为1</p>
+<p>$$
+\sum_{i=0}^{\infty}P(X=i) = 1\newline
+(\frac{\lambda}{\mu})^0 * P(X=0) + (\frac{\lambda}{\mu})^1 * P(X=0) &hellip; (\frac{\lambda}{\mu})^n * P(X=0) = 1\newline
+P(X=0) = \frac{(\mu - \lambda)}{\mu}
+$$</p>
+<p>同样的我们如果按照这个模型来计算平均待处理的请求数，可以得到</p>
+<p>$$
+\sum_{i=0}^{\infty}P(X=i) * i\newline
+= P(X=0) * \frac{\lambda}{\mu} * (\frac{1}{(1-\frac{\lambda}{\mu})^2})
+$$</p>
+<p>将P(X=0)代入可以得到</p>
+<p>$$
+L = \frac{\lambda^2}{\mu * (\mu - \lambda)}
+$$</p>
+<p>再通过<strong>Little&rsquo;s Law</strong>的公式我们可以得到</p>
+<p>$$
+W = \frac{\lambda}{\mu * (\mu - \lambda)}
+$$</p>
+<p>整个推导过程较长，你可以只记住最后一个公式，最后我们得到<strong>延迟</strong>和<strong>QPS</strong>以及<strong>单位时间处理请求量</strong>之间的关系。</p>
+<h3 id="3cpu利用率的表示">3.CPU利用率的表示</h3>
+<p>我们可以将CPU的利用率看作一段时间内的请求数量除以同一段时间内CPU最大可处理的请求数量，那么我们有以下公式</p>
+<p>$$
+\rho = \frac{\lambda * T}{\mu * T} = \frac{\lambda}{\mu}
+$$</p>
+<p>将其代入第二节我们得到的公式可以得到<strong>延迟</strong>与<strong>CPU利用率</strong>之间的关系</p>
+<p>$$
+W = \frac{\rho}{\mu*(1-\rho)}
+$$</p>
+<p>那么这个图具体长什么样呢？我们可以通过Walfram查看</p>
+<div style="text-align: center">
+<img src="/pic/interesting/latency-cpu/relation.png"/>
+</div>
+<p>从这幅图中我们可以发现随着CPU利用率的提升，延迟会快速的增长，我们可以通过下面的数据更具体的感受这一关系</p>
+<table>
+<thead>
+<tr>
+<th>CPU usage</th>
+<th>latency</th>
+<th>latency increase</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.2</td>
+<td>0.0025</td>
+<td></td>
+</tr>
+<tr>
+<td>0.3</td>
+<td>0.0042</td>
+<td>68%</td>
+</tr>
+<tr>
+<td>0.4</td>
+<td>0.006</td>
+<td>42%</td>
+</tr>
+<tr>
+<td>0.5</td>
+<td>0.01</td>
+<td>66%</td>
+</tr>
+<tr>
+<td>0.6</td>
+<td>0.015</td>
+<td>50%</td>
+</tr>
+<tr>
+<td>0.7</td>
+<td>0.023</td>
+<td>53%</td>
+</tr>
+<tr>
+<td>0.8</td>
+<td>0.040</td>
+<td>73%</td>
+</tr>
+<tr>
+<td>0.9</td>
+<td>0.090</td>
+<td>125%</td>
+</tr>
+<tr>
+<td>0.99</td>
+<td>0.99</td>
+<td>1000%</td>
+</tr>
+</tbody>
+</table>
+<p>可以看到每次CPU利用率提升10%，延迟就会增加50%以上。如果CPU利用率到达80%，延迟的增长率甚至能到125%.
+所以，我们可以得出以下结论</p>
+<ol>
+<li>为什么有时候CPU利用率到达了50%就需要扩容？ 因为延迟的增长和CPU的利用率并不是<strong>线性增长</strong>.</li>
+<li>如果CPU利用率到达了<strong>80%</strong>，就需要高度重视服务的负载了.</li>
+<li>如果你想要低延迟，你需要保持低CPU利用率。在代码不变的情况下，<strong>高CPU利用率</strong>意味着<strong>高延迟</strong>。(想到了之前公司领导提出的高利用率，低延迟的降本增效项目)</li>
+</ol>
+<h2 id="吞吐量和延迟之间的关系">吞吐量和延迟之间的关系</h2>
+<p>吞吐量和延迟一直是系统调优中永恒不变的话题，那么他们的到关系到底是怎么样的，我们能否像之前一样通过某种公式来描述它？</p>
+<h3 id="1-模型构建">1. 模型构建</h3>
+<p>首先我们假定以下条件</p>
+<ol>
+<li>我们只有一个服务器</li>
+<li>服务器一次只处理一个请求</li>
+<li>请求的到来服从泊松分布</li>
+<li>请求的处理时间服从泊松分布</li>
+<li>每个请求的处理时间保持一样</li>
+</ol>
+<p>根据以上的假设，我们可以用以下的图片来表明该模型，横轴表明时间，纵轴表明待处理的工作量。</p>
+<div style="text-align: center">
+<img src="/pic/interesting/latency-cpu/request.png"/>
+</div>
+<p>我们可以用下面的图来表明更一般的情况，即有可能一个请求还没处理完，下一个请求就来了。</p>
+<div style="text-align: center">
+<img src="/pic/interesting/latency-cpu/normal-request.png"/>
+</div>
+<p>现在我们可以尝试计算这个图形的面积，我们有两种方式计算这个图像的面积</p>
+<p>第一种方式
+$$
+Area = T * (average ~~ height)\newline
+= T * (average ~~ wait ~~ time)\newline
+= T * W\newline
+$$</p>
+<p>其中:</p>
+<p>$T$ 为时间的长度</p>
+<p>$W$ 为请求的平均等待时间</p>
+<p>第二种方式
+$$
+Area = (area ~ of ~ triangles) + (area ~ of ~ parallelograms)\newline
+= (number ~ of ~ request) * (area ~ of ~ single ~ triangle  + area ~ of ~ single ~ parallelogram)\newline
+= T*\lambda * ( (\frac{S^2}{2}) + S * W)
+$$</p>
+<p>其中:</p>
+<p>$T$ 为时间的长度</p>
+<p>$\lambda$ 为单位时间内可以处理的请求数，即吞吐量</p>
+<p>$S$ 为每个请求的处理时间</p>
+<p>$W$ 为请求的平均等待时间</p>
+<p>我们将上面两个公式进行求解</p>
+<p>$$
+T * W = T*\lambda * ( (\frac{S^2}{2}) + S * W)
+$$</p>
+<p>可以得到</p>
+<p>$$
+W = \frac{\lambda*S^2}{2 * (1 - S\lambda)}
+$$</p>
+<p>如果我们固定S(每个请求的处理时间), 我们可以获得以下W与 $\lambda$ 的函数图像，即延迟和吞吐量的关系。</p>
+<div style="text-align: center">
+<img src="/pic/interesting/latency-cpu/relation2.png"/>
+</div>
+<p>从该公式我们可以得到以下结论</p>
+<ol>
+<li>延迟与高吞吐成正比，也就是说低延迟和高吞吐是不可能同时存在的。</li>
+<li>我们也获得了一个符合直觉的情况，<strong>如果要高吞吐你需要高CPU利用率，如果你需要低延迟你需要低CPU利用率</strong>。</li>
+<li>如果你可以将处理请求的时间缩短一半，你可以在吞吐量增长一倍的情况下依旧保持之前一般的延迟。</li>
+</ol>
+<h2 id="结论">结论</h2>
+<ol>
+<li>为什么有时候CPU利用率到达了50%就需要扩容？ 因为延迟的增长和CPU的利用率并不是<strong>线性增长</strong>.</li>
+<li>如果CPU利用率到达了<strong>80%</strong>，就需要高度重视服务的负载了.</li>
+<li>如果你想要低延迟，你需要保持低CPU利用率。在代码不变的情况下，<strong>高CPU利用率</strong>意味着<strong>高延迟</strong>。</li>
+<li>延迟与高吞吐成正比，也就是说低延迟和高吞吐是不可能同时存在的。</li>
+<li>我们也获得了一个符合直觉的情况，<strong>如果要高吞吐你需要高CPU利用率，如果你需要低延迟你需要低CPU利用率</strong>。</li>
+<li>如果你可以将处理请求的时间缩短一半，你可以在吞吐量增长一倍的情况下依旧保持之前一般的延迟。</li>
+</ol>
+
+</div>
+<div class="tags">
+<div class="taxosfloating_left">
+<p>Categories</p>
+</div>
+<div class="termsfloating_right">
+<p>
+<a href="/categories/interesting/">interesting</a>
+</p>
+</div>
+<div class="clearit"></div>
+</div>
+<div id="disqus_thread"></div>
+<script type="text/javascript">
+(function() {
+
+
+if (window.location.hostname == "localhost")
+  return;
+var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+var disqus_shortname = 'tangdh-life';
+dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+(document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to load the comments.</noscript>
+
+
+</article>
+</div>
+</main><script src="/js/dark-mode.js"></script>
+
+</body>
+</html>

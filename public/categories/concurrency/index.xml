@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+	<channel>
+		<title>Concurrency on Don&#39;t Panic</title>
+		<link>http://localhost:1313/categories/concurrency/</link>
+		<description>Recent content in Concurrency on localhost:1313</description>
+		<generator>Hugo -- gohugo.io</generator>
+		<language>en-us</language>
+		<lastBuildDate>Mon, 15 May 2023 00:00:00 +0000</lastBuildDate>
+		<atom:link href="http://localhost:1313/categories/concurrency/index.xml" rel="self" type="application/rss+xml" />
+		<item>
+			<title>C&#43;&#43; Memory Model</title>
+			<link>http://localhost:1313/posts/c&#43;&#43;/memory-order/</link>
+			<pubDate>Mon, 15 May 2023 00:00:00 +0000</pubDate>
+			<guid>http://localhost:1313/posts/c&#43;&#43;/memory-order/</guid>
+			<description>
+			这篇文章是因为对C&#43;&#43;的内存模型和内存顺序感兴趣，在探索后对所学的知识进行一个总结，希望能以一个便于理解的方式让读者轻松了解C&#43;&#43;的Memory Model
+			</description>
+		</item>
+	</channel>
+</rss>

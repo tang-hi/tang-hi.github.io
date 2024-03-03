@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+	<channel>
+		<title>Categories on Don&#39;t Panic</title>
+		<link>http://localhost:1313/categories/</link>
+		<description>Recent content in Categories on localhost:1313</description>
+		<generator>Hugo -- gohugo.io</generator>
+		<language>en-us</language>
+		<lastBuildDate>Sun, 03 Mar 2024 00:00:00 +0000</lastBuildDate>
+		<atom:link href="http://localhost:1313/categories/index.xml" rel="self" type="application/rss+xml" />
+		<item>
+			<title>Alp</title>
+			<link>http://localhost:1313/categories/alp/</link>
+			<pubDate>Sun, 03 Mar 2024 00:00:00 +0000</pubDate>
+			<guid>http://localhost:1313/categories/alp/</guid>
+			<description>
+			
+			</description>
+		</item>
+		<item>
+			<title>Compression</title>
+			<link>http://localhost:1313/categories/compression/</link>
+			<pubDate>Sun, 03 Mar 2024 00:00:00 +0000</pubDate>
+			<guid>http://localhost:1313/categories/compression/</guid>
+			<description>
+			
+			</description>
+		</item>
+		<item>
+			<title>DataBase</title>
+			<link>http://localhost:1313/categories/database/</link>
+			<pubDate>Sun, 03 Mar 2024 00:00:00 +0000</pubDate>
+			<guid>http://localhost:1313/categories/database/</guid>
+			<description>
+			
+			</description>
+		</item>
+		<item>
+			<title>DuckDB</title>
+			<link>http://localhost:1313/categories/duckdb/</link>
+			<pubDate>Sun, 03 Mar 2024 00:00:00 +0000</pubDate>
+			<guid>http://localhost:1313/categories/duckdb/</guid>
+			<description>
+			
+			</description>
+		</item>
+		<item>
+			<title>Interesting</title>
+			<link>http://localhost:1313/categories/interesting/</link>
+			<pubDate>Mon, 13 Nov 2023 00:00:00 +0000</pubDate>
+			<guid>http://localhost:1313/categories/interesting/</guid>
+			<description>
+			
+			</description>
+		</item>
+		<item>
+			<title>LevelDB</title>
+			<link>http://localhost:1313/categories/leveldb/</link>
+			<pubDate>Wed, 21 Jun 2023 00:00:00 +0000</pubDate>
+			<guid>http://localhost:1313/categories/leveldb/</guid>
+			<description>
+			
+			</description>
+		</item>
+		<item>
+			<title>Full Text Search</title>
+			<link>http://localhost:1313/categories/full-text-search/</link>
+			<pubDate>Tue, 23 May 2023 00:00:00 +0000</pubDate>
+			<guid>http://localhost:1313/categories/full-text-search/</guid>
+			<description>
+			
+			</description>
+		</item>
+		<item>
+			<title>Lucene</title>
+			<link>http://localhost:1313/categories/lucene/</link>
+			<pubDate>Tue, 23 May 2023 00:00:00 +0000</pubDate>
+			<guid>http://localhost:1313/categories/lucene/</guid>
+			<description>
+			
+			</description>
+		</item>
+		<item>
+			<title>Book</title>
+			<link>http://localhost:1313/categories/book/</link>
+			<pubDate>Mon, 15 May 2023 00:00:00 +0000</pubDate>
+			<guid>http://localhost:1313/categories/book/</guid>
+			<description>
+			
+			</description>
+		</item>
+		<item>
+			<title>C&#43;&#43;</title>
+			<link>http://localhost:1313/categories/c&#43;&#43;/</link>
+			<pubDate>Mon, 15 May 2023 00:00:00 +0000</pubDate>
+			<guid>http://localhost:1313/categories/c&#43;&#43;/</guid>
+			<description>
+			
+			</description>
+		</item>
+		<item>
+			<title>Concurrency</title>
+			<link>http://localhost:1313/categories/concurrency/</link>
+			<pubDate>Mon, 15 May 2023 00:00:00 +0000</pubDate>
+			<guid>http://localhost:1313/categories/concurrency/</guid>
+			<description>
+			
+			</description>
+		</item>
+		<item>
+			<title>Vector Search</title>
+			<link>http://localhost:1313/categories/vector-search/</link>
+			<pubDate>Wed, 05 Apr 2023 00:00:00 +0000</pubDate>
+			<guid>http://localhost:1313/categories/vector-search/</guid>
+			<description>
+			
+			</description>
+		</item>
+		<item>
+			<title>Distributed System</title>
+			<link>http://localhost:1313/categories/distributed-system/</link>
+			<pubDate>Tue, 15 Nov 2022 00:00:00 +0000</pubDate>
+			<guid>http://localhost:1313/categories/distributed-system/</guid>
+			<description>
+			
+			</description>
+		</item>
+	</channel>
+</rss>
