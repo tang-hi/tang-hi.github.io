@@ -66,7 +66,7 @@ DuckDB与其他数据库不同，它将所有的信息都存储在了同一个�
    4. **block count** 总block数
 
 
-下面我们可以看到`Data`的存储,它由一个`schema count`和 **${schema_count}** 个`schema`组成，我们的表就存储在`schema`中。(schema在DuckDB中可以认为就是一个database) 
+下面我们可以看到`Data`的存储,它由一个`schema count`和 `${schema_count}` 个`schema`组成，我们的表就存储在`schema`中。(schema在DuckDB中可以认为就是一个database) 
 <div style="text-align: center">
 <img src="/pic/duckdb/overview.png"/>
 </div>
@@ -123,7 +123,7 @@ DuckDB与其他数据库不同，它将所有的信息都存储在了同一个�
 </div>
 
 最开始存储的是一系列column数据的元信息（后面会介绍column data block的结构)，后两个个字段十分好理解，第一个存储着表的统计信息，另一个存储着 `row group` 数量。
-这里引出两个问题，什么是`row group` ，为什么存储格式不和前面一样即<data-count, data, data, ... data>.而是只存储了一个`row group pointer`,如果`row group count` 大于1怎么办？
+这里引出两个问题，什么是`row group` ，为什么存储格式不和前面一样即`<data-count, data, data, ... data>`.而是只存储了一个`row group pointer`,如果`row group count` 大于1怎么办？
 
 ### row group
 我们都知道OLAP一般采取列式存储,而OLTP则采取行式存储。尽管在读取，计算方面列式存储优于行式存储，但如果是频繁的增删改查，行式存储则优于列式存储。因此DuckDB在这里做了一个折衷方案，即将tuple进行分组，组内进行列式存储。目前是每`122880`分为一组。
