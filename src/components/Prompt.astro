@@ -1,0 +1,79 @@
+---
+const { template } = Astro.props;
+const templateConfig = {
+  default: {
+    icon: "i-mdi:alert-circle-outline",
+    color: "border-blue-600",
+    textColor: "text-[#1e3a8a]",
+    titleColor: "text-blue-600",
+    text: "tips",
+  },
+  warning: {
+    icon: "i-mdi:alert-circle-outline",
+    color: "border-yellow-600",
+    textColor: "text-[#1e3a8a]",
+    titleColor: "text-yellow-600",
+    text: "warning",
+  },
+  danger: {
+    icon: "i-mdi:alert-circle-outline",
+    color: "border-red-600",
+    textColor: "text-[#1e3a8a]",
+    titleColor: "text-red-600",
+    text: "danger",
+  },
+  success: {
+    icon: "i-mdi:check-circle-outline",
+    color: "border-green-600",
+    textColor: "text-[#1e3a8a]",
+    titleColor: "text-green-600",
+    text: "success",
+  },
+  info: {
+    icon: "i-mdi:bookmark-outline",
+    color: "border-blue-600",
+    textColor: "text-[#1e3a8a]",
+    titleColor: "text-blue-600",
+    text: "info",
+  },
+};
+
+const currentConfig =
+  (
+    templateConfig as {
+      [key: string]: {
+        icon: string;
+        color: string;
+        textColor: string;
+        titleColor: string;
+        text: string;
+      };
+    }
+  )[template] || templateConfig["default"];
+---
+
+<div
+  class=`p-4
+  rounded-xl
+  border
+  border-3
+  border-dashed
+  text-sm/6
+  my-5
+  last:mb-0
+  relative
+  font-normal
+  ${currentConfig.color}
+  ${currentConfig.textColor}
+  `
+>
+  <div class="flex justify-start items-center">
+    <div class=`${currentConfig.icon} icon w-5 h-5 ${currentConfig.titleColor}`>
+    </div>
+    &nbsp;
+    <p class=`text-[1.25rem] m-0! ${currentConfig.titleColor}`>
+      {currentConfig.text}
+    </p>
+  </div>
+  <slot />
+</div>

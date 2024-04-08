@@ -1,0 +1,389 @@
+---
+title: C++ Memory Model
+pubDate: 2023-05-15
+categories: 
+  - C++ 
+  - concurrency
+description: '这篇文章是因为对C++的内存模型和内存顺序感兴趣，在探索后对所学的知识进行一个总结，希望能以一个便于理解的方式让读者轻松了解C++的Memory Model'
+---
+<link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/katex@0.15.2/dist/katex.min.css"
+    integrity="sha384-MlJdn/WNKDGXveldHDdyRP1R4CTHr3FeuDNfhsLPYrq2t0UBkUdK2jyTnXPEK1NQ"
+    crossorigin="anonymous"
+/>
+
+这篇文章是因为对C++的内存模型和内存顺序感兴趣，在探索后对所学的知识进行一个总结，希望能以一个便于理解的方式让读者轻松了解C++的Memory Model.我们不会直接讨论`memory model`做了什么,而是它**要做什么**, 在它出来之前我们是怎么做的，它是怎么集成了之前的做法，从而形成它独有的模型。
+
+## Data Race的原因
+
+首先我们知道，如果出现了`Data Race`的情况，最简单的方式就是一把大锁保平安，但是为什么锁就可以保证不出现`Data Race`? 锁究竟对我们的代码做了什么，从而导致`Data Race`的情况消失了? 这就是我们这篇文章想探索的问题。
+
+### Compiler优化
+
+我们通过两个示例代码来阐述为什么编译器的优化会造成Data Race。
+
+```c++
+int Value = 0;
+int IsPublished = 0;
+
+void sendValue(int x)
+{
+    Value = 1 + x;
+    IsPublished = 1 ;
+}
+```
+
+先看第一个例子
+
+1. 设置`Value`的值
+2. 设置`IsPublished = 1`
+
+如果我们有另一个线程，它会不断读取`IsPublished`,当`IsPublished == 1`时再去读取`Value`的值。在这种情况下，我们另一个线程可能读到`Value`的值为0！为什么？我们看一下这份代码所产生的汇编代码 **(如果没有特特殊说明, 我们使用的编译器为gcc9.5, 采用-O2 -std=c++11编译选项)**
+
+```asm
+sendValue(int):
+        mov     DWORD PTR IsPublished[rip], 1             ## first set isPublished = 1
+        add     edi, 2
+        mov     DWORD PTR Value[rip], edi
+        ret
+```
+
+从汇编代码中可以发现汇编与代码的顺序相反，我们首先设置`IsPublished = 1`，再设置`Value`的值。这就导致另一个线程看到`IsPublished = 1`时，`Value`的值可能还未设置。从而发生了`Data Race`。这是因为编译器在编译时，为了性能考虑，它可以任意交换代码的顺序。只要**单线程执行，交换顺序后的结果与不交换的结果保持一致**，我们将其称为`as-if法则`。因为`IsPublished`，`Value`是两个不相关的变量，交换它们的执行顺序并不会导致单线程的执行结果被改变，所以编译器可以进行这种优化，尽管对于多线程的程序来说，这会导致`Data Race`.
+
+我们再来看另一个例子
+
+```c++
+int value = 90;
+void foo() {
+
+    value = 100;               // A                
+    while(value == 100)
+    {
+        // do something
+    }
+    // exit loop
+}
+
+void end() {
+    value = 99;				  // B
+}
+```
+
+假设我们有两个线程，一个执行`foo`,一个执行`end`. 我们的预期是如果`A`比`B`先执行(假定都是原子操作)，线程`foo`会跳出循环。但是实际上`foo`可能永远都不会结束。还是老样子，我们看看汇编代码说了什么。
+
+```asm
+foo():
+        mov     DWORD PTR value[rip], 100
+.L21:
+        jmp     .L21                 # loop forever
+end():
+        mov     DWORD PTR value[rip], 99
+        ret
+```
+
+我们可以发现汇编后的`foo`，本质上就是一个死循环,它在将`value`设置为100后，就不停的循环下去了，根本不会再校验`value`的值。其原因也是`as-if法则`,因为上一条语句已经将`value`设置为100了，因此对于单线程来说，直接将语句转化为死循环就行了，不需要浪费时间再去检查`value`值了。
+
+从上面的两个例子中，我们可以看到编译器的优化尽管会增加单线程的效率，但是会破坏多线程的正确性。因此C++的`memory order`一定需要解决这个问题。在这一小节，我不会过多阐述C++的`memory order`是怎么做的，而是阐述`我们之前是怎么做的`。在下一节，我们才会正式介绍C++的`memory order`。
+
+#### **如何解决**
+
+我们有两个方式可以禁止Compiler的优化
+
+1. 使用Compiler barrier
+2. 使用`volatile`关键字
+
+#### **Compiler barrier**
+
+在代码中直接插入`asm volatile ("" ::: "memory")`,可以保证
+
+1. 在`compiler barrier`后的代码不会被编译器优化到`compiler barrier`前
+2. 在`compiler barrier`前的代码不会被编译器优化到`compiler barrier`后
+
+我们直接看第一个例子添加`asm volatile ("" ::: "memory")`后的汇编代码，可以发现`IsPublished = 1;`的汇编语句出现在了`Value = x + 2;`后，从而禁止了编译器不恰当的优化！( **compiler barrier 仅在编译阶段生效** )
+
+```asm
+# void sendValue(int x)
+# {
+#     Value = x + 2;
+#     asm volatile("" ::: "memory");
+#     IsPublished = 1 ;
+# } 
+
+sendValue(int):
+        add     edi, 2
+        mov     DWORD PTR Value[rip], edi
+        mov     DWORD PTR IsPublished[rip], 1
+        ret
+```
+
+**volatile**
+
+通过将变量声明为`volatile`,我们告诉编译器，这个变量可能在程序之外被修改（在嵌入式中使用的较多）。因此编译器会对该变量作出如下保证。
+
+1. 保证该变量一定会从内存中读取，而不是寄存器。
+2. 编译器不会将含有该变量的语句优化掉。
+3. 编译器不会将标记为`volatile`的变量进行重排序（不仅是该变量，而是所有被标记为`volatile`的变量）。
+
+我们看看上述两个例子使用`volatile`后的改变。
+
+```asm
+# Example 1
+# volatile int Value;
+# volatile int IsPublished = 0;
+ 
+# void sendValue(int x)
+# {
+#     Value = x + 2;
+#     IsPublished = 1 ;
+# } 
+endValue(int):
+        add     edi, 2
+        mov     DWORD PTR Value[rip], edi
+        mov     DWORD PTR IsPublished[rip], 1
+        
+# Example 2
+# volatile int value = 90;
+# void foo() {
+
+#     value = 100;
+ 
+#     while(value == 100)
+#     {
+#         // do something
+#     }
+#     // exit loop
+# }
+
+# void end() {
+#     value = 99;
+# }
+
+foo():
+        mov     DWORD PTR value[rip], 100
+.L21:
+        mov     eax, DWORD PTR value[rip]
+        cmp     eax, 100
+        je      .L21
+        ret
+end():
+        mov     DWORD PTR value[rip], 99
+        ret
+
+```
+
+第一个例子可以看到，因为声明为`volatile`，编译器不会再将其重排序了，这里之所以要将两个变量都声明为`volatile`是因为，**volatile** 和 **非volatile**变量是可以重排序的，只有都为`volatile`才不会重排序。而第二个例子中，可以看到编译器保证对`value`的读取都会从内存读取，并且不会对含有`volatile`的变量进行优化。
+
+### CPU乱序执行
+
+这里我们仍旧使用第一个例子，不同的是我们加上`compiler barrier`的约束
+```c++
+int Value = 0;
+int IsPublished = 0;
+
+void sendValue(int x)
+{
+    Value = 1 + x;
+    asm volatile("" ::: "memory");
+    IsPublished = 1 ;
+}
+```
+
+尽管我们在这里添加了`compiler barrier`，但是实际运行时，仍然可能出现在读到 `IsPublished = 1`后，`Value`的值为0的情况。这是因为CPU也可以乱序执行你所写的指令，只要符合`as-if法则`.因此可能在实际执行时，CPU先执行`IsPublished = 1 `后执行`Value = 1 + x`
+
+#### **如何解决**
+
+如果想要强制要求CPU按某种顺序执行指令，我们需要在代码中插入`memory barrier`, 这里仅介绍x86架构下的`memory barrier`,一共有三种`memory barrier`
+1. mfence 
+
+  > Performs a serializing operation on all load-from-memory and store-to-memory instructions that were issued prior the MFENCE instruction. This serializing operation guarantees that every load and store instruction that precedes in program order the MFENCE instruction is globally visible before any load or store instruction that follows the MFENCE instruction is globally visible
+2. lfence
+
+ > Performs a serializing operation on all load-from-memory instructions that were issued prior the LFENCE instruction. This serializing operation guarantees that every load instruction that precedes in program order the LFENCE instruction is globally visible before any load instruction that follows the LFENCE instruction is globally visible
+
+3. sfence
+
+ > Performs a serializing operation on all store-to-memory instructions that were issued prior the SFENCE instruction. This serializing operation guarantees that every store instruction that precedes in program order the SFENCE instruction is globally visible before any store instruction that follows the SFENCE instruction is globally visible.
+
+**mfence**，所有在mfence前的**读写**指令，都会被**mfence**后的**读写**指令感知到(可见),这么说可能比较抽象,我们看下面的图。
+
+![image-20230622222630329](/pic/C++/mfence.png)
+
+为了满足该正式定义其实很简单。
+
+1. 在mfence之前的读写代码，**可以**乱序执行。
+2. 在mfence之后的读写代码，**可以**乱序执行。
+3. 乱序执行的读写代码**不可以**跨过mfence指令。
+
+只要满足上述四点就可以满足`mfence`定义，这里不做证明，有兴趣的可以自己尝试着证明一下。
+
+
+
+**lfence**，所有在lfence前的**读**指令，都会被**lfence**后的**读**指令感知到(可见),这么说可能比较抽象,我们看下面的图。
+
+![image-20230622222630329](/pic/C++/lfence.png)
+
+为了满足该正式定义。
+
+1. 在lfence之前的读写代码，**可以**乱序执行。
+2. 在lfence之后的读写代码，**可以**乱序执行。
+3. 乱序执行的**读读**代码**不可以**跨过lfence指令，乱序执行的读写，写读，写写代码可以跨过lfence指令。
+
+**sfence**，所有在sfence前的**写**指令，都会被**sfence**后的**写**指令感知到(可见),这么说可能比较抽象,我们看下面的图。
+
+![image-20230622222630329](/pic/C++/sfence.png)
+
+为了满足该正式定义。
+
+1. 在sfence之前的读写代码，**可以**乱序执行。
+2. 在sfence之后的读写代码，**可以**乱序执行。
+3. 乱序执行的**写写**代码**不可以**跨过sfence指令，乱序执行的读写，写读，读读代码可以跨过sfence指令。
+
+
+
+## C++的内存模型
+
+我们按照难易度开始介绍C++的内存模型
+
+### RELAXED
+这个内存模型是最宽松的内存模型（性能最好），也就是约束最小的，简单来说，它只保证原子操作，不会对CPU的乱序执行进行任何保证（编译乱序，乱序执行，只要有一个不保证，就是全不保证）。因此它适合计数功能，比如`shared_ptr`的引用计数(在析构时不适用).
+
+一般使用的方式为
+```c++
+atomic<int> ref;
+ref.store(1, memory_order_relaxed);
+
+atomic_thread_fence(memory_order_relaxed); // 这个语句没有任何用处
+```
+
+
+### SEQUENTIALLY-CONSISTENT
+这个内存模型是最严格的内存模型（性能最差）
+#### Atomic operation
+
+作为原子操作时，该模型除了保证原子操作外，它同时保证我们可以将各个线程的原子操作拿出来，然后确定一个执行顺序(即先执行线程A，再线程B，再线程A)。而这个顺序是全局确定的，即每一个线程看到的都是这个顺序。简单来说就是
+
+1. 代码实际执行时按照你写的顺序执行
+2. 对内存修改读取的顺序，所有线程唯一。
+
+这也是最符合直觉的内存模型。
+
+```c++
+std::atomic<bool> x,y;
+std::atomic<int> z;
+void write_x()
+{
+   x.store(true,std::memory_order_seq_cst);     // A
+}
+void write_y()
+{
+    y.store(true,std::memory_order_seq_cst);   // B
+}
+void read_x_then_y()
+{
+    while(!x.load(std::memory_order_seq_cst));   // C
+    if(y.load(std::memory_order_seq_cst))		// E
+        ++z;
+}
+void read_y_then_x()
+{
+    while(!y.load(std::memory_order_seq_cst));  // D
+    if(x.load(std::memory_order_seq_cst))       // F
+        ++z;
+}
+int main()
+{
+    x=false;
+    y=false;
+    z=0;
+    std::thread a(write_x);
+    std::thread b(write_y);
+    std::thread c(read_x_then_y);
+    std::thread d(read_y_then_x);
+    a.join();
+    b.join();
+    c.join();
+    d.join();
+    assert(z.load()!=0); // always true!
+}
+```
+
+从这个代码中我们可以得知
+
+1. 当C发生时,A一定已经发生
+2. 当D发生时,B一定已经发生
+3. 当E发生时,C, A一定已经发生
+4. 当F发生时,D, B一定已经发生
+
+因此若E,F都为false,说明A,B都未发生但C,D都已经发生.这与1,2矛盾.因此`assert`一定为true.
+
+#### Fence
+当`std::memory_order_seq_cst`用于`std::atomic_thread_fence`等价于代码中插入`mfence`,对于`mfence`的定义可以看前面的描述.
+
+### ACQUIRE_RELEASE
+这个内存模型的严格性居中（性能居中）
+#### Atomic operation
+
+这个模型没法再取得全局唯一的执行顺序了(即有可能线程A看到线程C的执行顺序是ABCD,但是线程B看到线程C的执行顺序为BDAC).
+它只能通过`acquire`和`release`来进行同步线程.
+
+那么`acqurie`与`release`分别代表了什么样的语义呢?
+![image-20230622222630329](/pic/C++/acquire-release.png)
+
+从图中可以看到如果`acquire`不允许后面的指令重排序越过该语句,而`release`不允许前面的指令重排序越过该语句,因此他们两个一对很好的构成了临界区.是的,我们可以把`acquire`看作`lock`,把`release`看作`unlock`.
+![image-20230622222630329](/pic/C++/section.png)
+
+那么这两个怎么对线程取得同步呢?很简单,如果`acquire`获得了`release`存储的值,那么这两个线程就取得了同步.`release`之前的所有内存操作都会被`acquire`感知到.
+
+现在我们看下面的例子.
+```c++
+std::atomic<bool> x,y;
+std::atomic<int> z;
+void write_x()
+{
+   x.store(true,std::memory_order_release);     // A
+}
+void write_y()
+{
+    y.store(true,std::memory_order_release);   // B
+}
+void read_x_then_y()
+{
+    while(!x.load(std::memory_order_acquire));   // C
+    if(y.load(std::memory_order_acquire))		// E
+        ++z;
+}
+void read_y_then_x()
+{
+    while(!y.load(std::memory_order_acquire));  // D
+    if(x.load(std::memory_order_acquire))       // F
+        ++z;
+}
+int main()
+{
+    x=false;
+    y=false;
+    z=0;
+    std::thread a(write_x);
+    std::thread b(write_y);
+    std::thread c(read_x_then_y);
+    std::thread d(read_y_then_x);
+    a.join();
+    b.join();
+    c.join();
+    d.join();
+    assert(z.load()!=0); // maybe failed!
+}
+```
+
+从这个代码中我们可以知道在`SEQUENTIALLY-CONSISTENT`的情况下,assert一定为true,但是在`acquire-release`中,这个assert可能失败.
+
+尽管A和C同步,B和D同步. 但是E和B, F和A并不同步,他们仍然可能读到的是false.从而导致assert失败.(因为读到了线程本地的cache)
+
+#### Fence
+当`std::memory_order_acquire`用于`std::atomic_thread_fence`等价于禁止LOAD，STORE重排序到这条语句前，同时禁止LOAD语句重排序到这条语句后。
+
+当`std::memory_order_acquire`用于`std::atomic_thread_fence`等价于禁止LOAD，STORE重排序到这条语句后，同时禁止STORE语句重排序到这条语句前。
+
+
+### Overview
+因为对于CPU的MESI协议等的理解还不够,因此这篇文章写的还比较浅显,等后面完全弄懂了CPU的缓存一致性协议再继续完成.

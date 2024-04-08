@@ -1,0 +1,270 @@
+---
+title: More Effective C++
+pubDate: 2023-02-11
+categories: 
+  - C++ 
+  - Book
+description: '这篇博客主要是用来加深自己对读过的书的记忆。写的内容可能只对我自己产生价值'
+---
+<link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/katex@0.15.2/dist/katex.min.css"
+    integrity="sha384-MlJdn/WNKDGXveldHDdyRP1R4CTHr3FeuDNfhsLPYrq2t0UBkUdK2jyTnXPEK1NQ"
+    crossorigin="anonymous"
+/>
+
+这篇博客主要是用来加深自己对读过的书的记忆。写的内容可能只对我自己产生价值
+
+### Item 1: Distinguish between pointers and references
+
+引用相较于指针
+
+**优势** 他总是有效的，即没有null reference，指针则需要检查是否为空
+
+**劣势** 指针可以指向一个新的对象，引用不行。指针可以使用nullptr表示不存在，如果你需要该变量拥有不存在的语义，使用pointer。
+
+**总结** 当你确认你需要指向某个东西，并且绝对不会改变指向其它东西，使用reference，不然的话使用pointer
+
+### Item 2: Prefer C++-style casts
+
+C的转型，无法区分想做的是什么类型的转型，而且较难分辨，尽量使用C++的新式转型
+
+1. **static_cast** 基本拥有C旧式转型的相同威力与意义
+2. **cons_cast** 用于强转const属性
+3. **dynamic_cast** 用于在继承体系中向下转型，转型失败时会以nullptr或者exception表现出来
+4. **reinterpret_cast** 用于转换二进制和序列化，或者函数指针的转型
+
+### Item 3:  Never treat arrays polymorphically :skull:
+
+数组类型不能被当作多态来进行传递，即
+
+```c++
+void printBSTArray(const BST array[]);
+class BalancedBST: public BST {};
+printBSTArray(BalancedBST) // error!
+```
+
+Why? 当你读取数组元素时，偏移是根据你申明的类型来进行计算的，但是子类的大小和父类基本都是不一致的，因此你实际使用的偏移是错误的，这是一个未定义行为！
+
+### Item 4:  Avoid gratuitous default constructors
+
+如果一个类不借助外部的信息就无法正确初始化，那么就应该避免提供默认构造函数，但这会带来以下几个问题
+
+1. 对于数组类型 **A a[10]** 没有默认构造函数即无法生成，需要使用别的方式生成，例如使用指针数组，而不是对象数组
+2. 对于一些基于模板的容器类型无法很好的兼容，因为他们可能假设你的类拥有默认构造函数
+3. 如果virtual base class 缺乏默认构造函数，后续继承他的类都需要知道其意义(bad design)。
+
+结论，这是一个case by case的问题，根据实际情况进行抉择。
+
+### Item 5:   Be wary of user-defined conversion functions
+
+对于自己定义转换函数需要格外的小心，因为他们可能导致非预期的函数调用，编译器会想尽办法帮你编译成功，因此可能在你未预料的地方给你进行了隐饰转换，解决办法
+
+1. 定义 **asType()**的成员函数，进行显式的类型转换
+2. 使用**explicit**去除单自变量的constructor的隐式转换
+
+### Item 6:  Distinguish between prefix and postfix forms of increment and decrement operators
+
+前置++返回引用，后置++返回const 对象(const 对象防止 a++++)
+
+后置++有一个临时变量的负担。
+
+prefer prefix
+
+### Item 7: Never overload &&, ||, or ,
+
+
+
+这些符号是由短路特性，而且保证从左往右计算，如果你对其进行重载，函数传进来的参数是无法保证计算顺序的，会导致与常规理解不符，从而导致未定义行为。
+
+### Item 8:  Understand the different meanings of new and delete
+
+**new** 
+
+1. 分配内存
+2.  在该内存上调用构造函数 
+
+**operator new**  （void* operator new(size_t size))
+
+1. 返回一块原始的未初始化的内存
+
+**placement new** ( new (memory pointer) Type(args) )
+
+1. 在memory pointer上调用构造函数
+
+**new []  和 operator new[]** 对应的数组版 
+
+delete 与new对应，需要成对出现
+
+delete - new
+
+operator delete - operator new
+
+### Item 9: Use destructors to prevent resource leaks
+
+因为有异常的存在，可能你释放资源之前就抛出了异常，导致资源泄漏。如果不断写catch会使代码乱七八糟，因此将资源释放放到析构函数中，即RAII
+
+
+
+### Item 10: Prevent resource leaks in constructors
+
+如果contructor抛出异常，因为对象尚未完全构建完全，因此析构函数不会被调用，从而导致内存泄漏，解决办法为尽量使member不要是指针并且为智能指针。
+
+### Item 11: Prevent exceptions from leaving destructors
+
+如果析构函数中抛出了异常有两个坏处1. 可能导致程序直接终止 2.导致析构函数需要执行的语句没有执行完，即内存泄漏，因此需要尽力避免析构函数抛出异常。
+
+### Item 12: Understand how throwing an exception differs from passing a parameter or calling a virtual function
+
+1. 异常类型永远会复制一份，无论捕获方式是什么
+2. 被抛出作为exception的对象，其被允许的类型转化方式比被传递到函数的去的方式少
+3. 异常比对是第一个成功就执行，而不是最佳匹配。
+
+### Item 13: Catch exceptions by reference
+
+
+
+用指针捕获，容易导致传进来的指针已经失效，或者不知道该不该释放这个指针
+
+用值捕获，需要多复制一份且不支持多态
+
+用引用捕获，没有缺点！
+
+### Item 14: Use exception specifications judiciously
+
+C++11基本不怎么使用了，仅用noexcept
+
+### Item 15: Understand the costs of exception handling
+
+使用profile去检查性能的影响
+
+### Item 16: Remember the 80-20 rule
+
+在真正关键的地方进行努力
+
+### Item 17: Consider using lazy evaluation
+
+经典的计算机思想，仅在需要时计算。
+
+### Item 18: Amortize the cost of expected computations
+
+将计算平坦到每一次调用中，例如你需要计算一个数组中的最大值，可以在每一次添加元素时，对最大值进行更新。
+
+### Item 19: Understand the origin of temporary objects
+
+临时对象可能很耗成本，所以应该尽可能消除它们。例如reference to const 以及 value的地方就可能产生临时对象.
+
+### Item 20: Facilitate the return value optimization
+
+详情看[RVO](../C++/rvo.md)
+
+### Item 21:  Overload to avoid implicit type conversions
+
+使用重载来消除隐式转换，从而消除临时变量，例如
+
+```c++
+const UPInt operator+(const UPInt& lhs, // add UPInt
+					  const UPInt& rhs); // and UPInt
+
+const UPInt operator+(const UPInt& lhs, // add UPInt
+					  int rhs); // and int
+
+const UPInt operator+(int lhs, // add int and
+					  const UPInt& rhs); // UPInt
+```
+
+这样当执行 **upi3 = upi1 + 10;** 就不会有因为类型转换而产生临时变量。
+
+### Item 22: Consider using op= instead of stand-alone op
+
+复合版本即+=，一般效率高于+，因为不需要产生临时变量。
+
+### Item 23: Consider alternative libraries
+
+这个没啥说的，有什么高性能库就用什么吧。
+
+### Item 24: Understand the costs of virtual functions, multiple inheritance, virtual base classes, and RTTI
+
+
+
+这个也没啥说的，只有实际碰到才能知道。
+
+### Item 25: Virtualizing constructors and non-member functions
+
+虚构造函数，实际就是一个虚static成员函数，在构造函数中调用，从而实现虚构造函数
+
+虚non-member函数，写一个虚函数做实际工作，再安排非虚函数对其进行调用。
+
+### Item 26: Limiting the number of objects of a class
+
+设计一个Counted类，在内部进行计算，从而用户无感知
+
+### Item 27: Requiring or prohibiting heap-based objects
+
+有一个hack的方式检查对象是否在heap中(利用程序的内存布局，但不具有可扩展性)
+
+```c++
+bool onHeap(const void *address)
+{
+	char onTheStack; // local stack variable
+	return address < &onTheStack;
+}
+```
+
+我们没有完美的方式来限制对象是否在heap中
+
+### Item 28: Smart pointers
+
+C++11 已经支持了
+
+### Item 29: Reference counting
+
+经典问题，不展开了
+
+### Item 30: Proxy classes
+
+使用proxy对象来表示某些并不存在的对象，并且让用户无感知即为proxy classes
+
+### Item 31: Making functions virtual with respect to more than one object
+
+multi dispatch，最佳解决手段，自己写虚表。
+
+### Item 32: Program in the future tense
+
+时刻想着自己写的代码会被各种扩展，以及各种神奇的需求
+
+### Item 33: Make non-leaf classes abstract
+
+专门抽象出Abstract类，让其他类来继承。
+
+### Item 34: Understand how to combine C++ and C in the same program
+
+```c++
+#ifdef __cplusplus
+extern "C" {
+#endif
+void drawLine(int x1, int y1, int x2, int y2); // 以这种方式避免编译器重命名
+void twiddleBits(unsigned char bits);
+void simulate(int iterations);
+...
+#ifdef __cplusplus
+}
+#endif
+```
+
+If you want to mix C++ and C in the same program, remember the following simple guidelines:
+
+ ■ Make sure the C++ and C compilers produce compatible object files.
+
+ ■ Declare functions to be used by both languages extern "C". 
+
+ ■ If at all possible, write main in C++.
+
+ ■ Always use delete with memory from new; always use free with memory from malloc. 
+
+ ■ Limit what you pass between the two languages to data structures that compile under C; the C++ version of structs may contain nonvirtual member functions.
+
+
+
+### Item 35: Familiarize yourself with the language standard
+
+熟悉语言标准！多看看RFC！

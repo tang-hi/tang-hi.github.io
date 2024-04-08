@@ -1,0 +1,115 @@
+---
+title: Virtual 机制
+pubDate: 2023-02-18
+categories: 
+  - C++ 
+description: '这篇文章尝试使用较底层的视角来审视C++中虚函数是如何实现的'
+---
+<link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/katex@0.15.2/dist/katex.min.css"
+    integrity="sha384-MlJdn/WNKDGXveldHDdyRP1R4CTHr3FeuDNfhsLPYrq2t0UBkUdK2jyTnXPEK1NQ"
+    crossorigin="anonymous"
+/>
+
+这篇文章会尝试使用`GDB`来分析C++中虚函数的实现机制。希望可以帮助你更加透彻的理解C++的虚函数实现。
+
+我们用来测试的程序
+
+```c++
+#include <iostream>
+using namespace std;
+struct Simple {
+  int one;
+};
+struct Base {
+  virtual void v1() {
+    cout << "Base::V1" << endl;
+  }
+
+  virtual void v2() {
+    cout << "Base::V2" << endl;
+  }
+
+  int one;
+
+};
+
+
+struct Derived : Base {
+  void v1() override {
+    cout << "Derived::v1" << endl;
+  }
+
+};
+
+int main() {
+  Base* derived = new Derived();
+  Base* derived1 = new Derived();
+  Base* base = new Base();
+  Base* base1 = new Base();
+
+  Simple* simple = new Simple();
+
+  derived->v1();
+  derived->v2();
+
+}
+```
+
+下面我们将代码进行编译后，然后使用gdb进行分析
+
+```shell
+g++ virtual.cc --std=c++11 -g
+gdb a.out
+```
+
+我们首先分别看一下`derived`,`derived1`,`base`,`base1`,`simple`中的内容
+
+![image-20230622221528352](/pic/C++/virtual-add1.png)
+
+
+![image-20230622222630329](/pic/C++/virtual-add2.png)
+
+| variable name | address        |
+| ------------- | -------------- |
+| derived       | 0x55555556aeb0 |
+| derived1      | 0x55555556aed0 |
+| base          | 0x55555556aef0 |
+| base1         | 0x55555556af10 |
+| simple        | 0x55555556af30 |
+
+从这两张图，我们可以发现如下几件事
+
+1. 当一个class有虚函数时，该class的对象中会有一个`vptr`.
+2. 该`vptr`的大小为**8byte**(0x55555556aeb8 - 0x55555556aeb0)
+3. 该`vptr`所指向的内容仅与class的类型有关，与对象**无关** (derived.vptr == derived.vptr1)
+
+我们下面以**derived**为例,看一下`vptr`所指向的内容。
+
+![image-20230622223541703](/pic/C++/vtable.png)
+
+我们可以看到`vptr`指向了一些东西，但具体是什么我们还不知道,但是我们可以发现这个地址的值`0x5555555553a6`（小端写法）好像是一个地址，那么我们可以查看一下这个地址指向的是什么。
+
+![image-20230622224641115](/pic/C++/vtable-content.png)
+
+结果很明显，这里面的值指向的是函数`Derived::v1`的定义,我们可以通过这个地址对该函数进行调用。我们再看一下其他的值。
+
+![image-20230622225025776](/pic/C++/vtable-all.png)
+
+所以结论很清楚，当你的class中含有虚函数时，编译器会为该类创建一个专属的`vtable`,`vtable`中存放着各个虚函数的实现，如果该类有自己的实现，那么指向的就是它自己的实现，否则指向父类的实现。然后当你创建一个类的对象时，编译器会将指向该`vtable`的指针给到对象的`vptr`中。
+
+我们最后再看一下，调用的过程。
+
+`derived->v1();`
+
+![image-20230622230204986](/pic/C++/virtual-call1.png)
+
+` derived->v2();`
+
+![image-20230622230402086](/pic/C++/virtual-call2.png)
+
+其中`rbp`为栈帧,其中`-0x38(%rbp)`为获取`derived`的地址，即`0x55555556aeb0`,也就是`vptr`的地址，随后通过`mov (%rax),%rax`得到`vtable`的地址并保存在`%rax`中，因为调用的函数不同，因此`derived->v2();`的汇编需要将`%rax + 8`得到对应的地址。然后通过`mov (%rax),%rdx`得到需要调用的函数地址，最后通过`call *%rdx`完成多态的函数调用。
+
+## 总结
+
+当当一个class有虚函数时，编译器会为该class对象生成一个`vptr`，该`vptr`的大小为**8byte**,所指向的内容仅与class的类型有关，与对象**无关**,这里面的值指向的是函数`Derived::v1`的定义,我们可以通过这个地址对该函数进行调用。当实际调用时，编译器会根据你调用的函数不同，调整vtable所指的entry,最后根据`entry`项中的地址，完成函数调用。
