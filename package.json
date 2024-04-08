@@ -11,6 +11,7 @@
     "new-post": "./scripts/new-post.sh",
     "update-theme": "./scripts/update-theme.sh"
   },
+  "packageManager": "pnpm@8.15.6",
   "dependencies": {
     "@astrojs/check": "^0.3.4",
     "@astrojs/mdx": "^2.2.4",
