@@ -6,11 +6,11 @@ categories:
   - DuckDB
 description: 'DuckDB is an open-source OLAP database. Similar to SQLite, this article will introduce how DuckDB stores its table structure.'
 ---
+
 <link rel="stylesheet"
     href="https://cdn.jsdelivr.net/npm/katex@0.15.2/dist/katex.min.css"
     integrity="sha384-MlJdn/WNKDGXveldHDdyRP1R4CTHr3FeuDNfhsLPYrq2t0UBkUdK2jyTnXPEK1NQ"
-    crossorigin="anonymous"
-/>
+    crossorigin="anonymous"/>
 
 In this article, we will explore how DuckDB organizes its table structures. We'll focus solely on the table structures while disregarding any irrelevant details.
 
@@ -21,7 +21,6 @@ In this article, we will explore how DuckDB organizes its table structures. We'l
 DuckDB stands out from other databases by storing all of its data within a single file. To manage this data effectively, DuckDB utilizes two types of blocks: `MetaBlocks` and `DataBlocks`.
 
 1. A `DataBlock` represents an individual unit of stored information.
-
 
 2. On the other hand, a `MetaBlock` functions as a collection of blocks with its first 8 bytes indicating the value of 'next_block_id'. By employing such block lists when necessary due to excessive content volume.
 
@@ -69,7 +68,7 @@ Now let's move on to DataBaseHeader:
 3) **Free list**: Blocks ready for reuse, saving space and resources.
 4) **Block count**: The total number of blocks in the database.
 
-Now, let's take a look at how the actual data is stored. It consists of a `schema count` and ${schema_count} individual `schemas`. In DuckDB, think of a schema as a database.
+Now, let's take a look at how the actual data is stored. It consists of a `schema count` and `${schema_count}` individual `schemas`. In DuckDB, think of a schema as a database.
 
 <div style="text-align: center">
 <img src="/pic/duckdb/overview.png"/>
@@ -132,7 +131,7 @@ Now let's examine how `table data block` stores its actual structured informatio
 </div>
 
 The initial storage contains metadata about a series of column data (the structure of the column data block will be explained later). The last two fields are easy to understand. The first one stores statistical information about the table, and the other one stores the number of 'row groups'.
-Now, let's address two questions: what is a 'row group', and why is the storage format different from before, which was <data-count, data, data,...data>, but now only stores a 'row group pointer'? What happens if there are more than 1 'row group'?
+Now, let's address two questions: what is a 'row group', and why is the storage format different from before, which was `<data-count, data, data,...data>`, but now only stores a 'row group pointer'? What happens if there are more than 1 'row group'?
 
 ### row group
 We all know that OLAP generally uses columnar storage while OLTP uses row-based storage. Although columnar storage is superior in terms of reading and computation, when it comes to frequent insertions, deletions or updates, row-based storage outperforms columnar storage. Therefore, DuckDB has come up with a compromise here by grouping tuples and storing them in columns within each group. Currently, every `122880` tuples form one group.
