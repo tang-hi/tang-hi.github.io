@@ -375,7 +375,7 @@ ldb文件由五部分组成
 
 开始存着一系列的布隆过滤器,然后是各个布隆过滤器的offset数组,紧跟着offset的offset(通过该值找到offset,因为offset是数组是一个变值),最后跟的是这个`filter block`的元信息(`data block`数据多大后产生一个布隆过滤器)
 
-而`filter index block`则使用`Block`的存储格式存储着**Key: "filter.${filter.name}", Value: offset and size of filter block**
+而`filter index block`则使用`Block`的存储格式存储着**Key: "filter.$(filter.name)", Value: offset and size of filter block**
 
 最后的`Footer`的格式则为下图所示.
 <div style="text-align: center">
