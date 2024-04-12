@@ -29,7 +29,7 @@ DuckDB不同于其他的数据库，并没有使用B+树作为主要索引结构
 在讲ART索引之前，我们先看一下Trie树。(如果你不知道Trie树，可以参考[Trie](https://en.wikipedia.org/wiki/Trie#:~:text=A%20prefix%20trie%20is%20an,of%20words%20with%20common%20prefixes.) )
 
 <div style="text-align: center">
-<img src="/pic/duckdb/trie.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/trie.png"/>
 </div>
 
 我们可以看到Trie树在检索时的优点是，它的检索时间仅与最长的字符串长度有关，而与存储的字符数量无关，这一特性在数据量极大的情况下十分优秀。但是它的缺点是浪费空间，即每个内部节点都需要保存**固定数量**的指针，即使它仅有极少的子结点。
@@ -45,7 +45,7 @@ ART则是在Trie树的基础上，解决了它缺点的同时，保留了它的�
 但是如果我们使用Trie树做索引(ART是Trie的一个变种)，我们就要面临取舍，如果内部节点可以拥有的最大子结点越多(空间占据越多)，那么它的高度也越低(速度越快)。如果内部节点拥有的最大子结点越少(空间占据越少)，那么他的高度也越高(速度越慢)。
 
 <div style="text-align: center">
-<img src="/pic/duckdb/trade-off.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/trade-off.png"/>
 </div>
 
 ART树选择每个内部节点的大小为8bit(子结点的数量为256),刚好是一个`byte`。这样的好处是免去了内存对齐的问题，同时在空间与速度上取得了一个较好的平衡。我们称内部节点所占据的位宽为`span`.
@@ -58,19 +58,19 @@ ART树选择每个内部节点的大小为8bit(子结点的数量为256),刚好�
 
 ### Node4
 <div style="text-align: center">
-<img src="/pic/duckdb/node4.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/node4.png"/>
 </div>
 从图中可以看出，Node4分为两个部分，一个是key数组，一个是child数组。`key数组`存放key的部分内容(也就是key的一个byte)，`child数组`则是保存对应的子结点的指针。注意，我们为了可以范围查询，key数组要求顺序存储。
 
 ### Node16
 <div style="text-align: center">
-<img src="/pic/duckdb/node16.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/node16.png"/>
 </div>
 Node16和Node4几乎一样，区别只是从4个`slot`变为16个`slot`
 
 ### Node48
 <div style="text-align: center">
-<img src="/pic/duckdb/node48.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/node48.png"/>
 </div>
 Node48和之前介绍的Node一样也是分为`key数组`和`child数组`,区别在于Node48的`key数组`长度为256,这样子我们就无须通过遍历找到对应的数组，而是可以直接通过key的二进制值作为下标直接定位到对应的`key slot`。`key slot`中存放的是指针，指向对应的子结点在child数组中的位置。因此child数组的长度仅需要48就可以了。
 
@@ -78,7 +78,7 @@ Node48和之前介绍的Node一样也是分为`key数组`和`child数组`,区别
 
 ### Node256
 <div style="text-align: center">
-<img src="/pic/duckdb/node256.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/node256.png"/>
 </div>
 Node256就是Trie树原始的内部节点表示形式，仅需要一个数组，数组的下标即为key，数组中存放的就是子结点的指针。
 
@@ -98,13 +98,13 @@ DuckDB采用的是第一种方式。
 
 1. lazy expansion
 <div style="text-align: center">
-<img src="/pic/duckdb/lazy-expansion.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/lazy-expansion.png"/>
 </div>
 其实这个优化相当简单，我们只需`Leaf`可以保存多个byte即可，这样子对于多个只有一个子结点的路径来说，我们可以将其都保存在`Leaf`中，从而减少树的高度。
 
 2. path compression
 <div style="text-align: center">
-<img src="/pic/duckdb/path-compress.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/path-compress.png"/>
 </div>
 这个优化和lazy expansion类似，我们只需让`内部节点`可以保存多个byte即可。即如果内部节点有相同的前缀，我们可以将其保存在Prefix中，`key数组`仅仅只对**key不同**的部分作区分。这样子也可以有效的减少树的高度。
 
@@ -340,7 +340,7 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 ```
 如果当前遇到的是叶节点，同时key完全相同，那么我们可以直接将`row_id`插入叶节点中。不然的话，我们需要将叶节点变为内部节点，同时将不同的部分作为该内部节点的叶节点。如下图所示。
 <div style="text-align: center">
-<img src="/pic/duckdb/leaf-insert.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/leaf-insert.png"/>
 </div>
 
 ```c++
@@ -392,13 +392,13 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 1. 如果前缀完全相同，即“hello"和”hellopxxx“。那么我们仅需要找出子结点进行插入即可。如下图所示。
 
 <div style="text-align: center">
-<img src="/pic/duckdb/node-insert1.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/node-insert1.png"/>
 </div>
 
 2. 如果前缀有不同指出，那么我们需要创建一个新的节点。并将两个节点作为子结点进行插入。如下图所示。
 
 <div style="text-align: center">
-<img src="/pic/duckdb/node-insert2.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/node-insert2.png"/>
 </div>
 
 可以看到，我们只需要在内部节点，和叶节点中支持存储多个字符后，便天然支持上述的有化方案。

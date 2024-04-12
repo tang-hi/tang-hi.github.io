@@ -23,7 +23,7 @@ Product Quantization是一种用于向量量化的方法，由Hervé Jégou和Ol
 量化就是将一个集合映射到另一个离散的集合之中，那么PQ实际上就是将数据集中的每一个向量映射到另一个集合中，比如说整数集合。即
 
 <div style="text-align: center">
-<img src="/pic/PQ1.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/PQ1.png"/>
 </div>
 
 
@@ -43,13 +43,13 @@ Product Quantization是一种用于向量量化的方法，由Hervé Jégou和Ol
 假设向量的维数为128,我们首先将该向量平均分为8份，每一个的维数为16。
 
 <div style="text-align: center">
-<img src="/pic/PQ2.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/PQ2.png"/>
 </div>
 
 如果我们有1000个向量，我们将每一份向量平均分为8份，V0, V1.... V7。那么我们会有1000个V0, 1000个V1,...1000个V7。我们分别对他们进行**K-means**聚类，同时假定我们选定K-means的**K**为256。那么我们在每一个Vi中会得到256个centroids。
 
 <div style="text-align: center">
-<img src="/pic/PQ3.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/PQ3.png"/>
 </div>
 
 ### 	2. Encode
@@ -57,7 +57,7 @@ Product Quantization是一种用于向量量化的方法，由Hervé Jégou和Ol
 在得到centroids后，我们为每一个向量进行编码，我们首先分别对V0,V1,....V7进行编码，编码的规则相当简单。我们拿V0进行举例，首先我们遍历V0中每一个向量，并且选择距离当前向量最近的一个centroids作为其对应的编码值，如果向量A距离centroids42最近，那么A的编码值即为42。在完成V0,V1....V7的编码值后，我们将其拼接起来就会得到所有向量的编码值。
 
 <div style="text-align: center">
-<img src="/pic/PQ4.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/PQ4.png"/>
 </div>
 
 ####	Summary
@@ -69,7 +69,7 @@ Product Quantization是一种用于向量量化的方法，由Hervé Jégou和Ol
 当我们已经对数据库中的所有向量都已经进行了量化，我们需要在用户给定任意向量后，从数据库中寻找与该向量最相似的N个向量，首先我们仍旧对query进行split。
 
 <div style="text-align: center">
-<img src="/pic/PQ5.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/PQ5.png"/>
 </div>
 
 > 注意我们不会对Query进行量化，仅仅只做Split，原因是这样子可以在距离计算时保证更高的精度，详情可以参考论文原文
@@ -77,13 +77,13 @@ Product Quantization是一种用于向量量化的方法，由Hervé Jégou和Ol
 在Split后，我们会计算对应的Split部分与每一个centroids的距离，并将该距离进行保存。
 
 <div style="text-align: center">
-<img src="/pic/PQ6.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/PQ6.png"/>
 </div>
 
 随后我们遍历数据库中所有的向量，通过查表分别计算出Query中每一段与他们之间的距离，随后相加得到最终的距离，并最终选择距离最近的K个向量。
 
 <div style="text-align: center">
-<img src="/pic/PQ7.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/PQ7.png"/>
 </div>
 
 ### 	4. IVF
@@ -92,18 +92,18 @@ Product Quantization是一种用于向量量化的方法，由Hervé Jégou和Ol
 
 
 <div style="text-align: center">
-<img src="/pic/PQ8.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/PQ8.png"/>
 </div>
 需要注意的是每一个centroid后面都会挂载属于这个分区的向量，但这向量不是数据集中的原始向量，而是原始向量与centroid的残差。之所以选择残差是因为这样可以降低数据集中的方差，从而在进行ANN搜索时，距离计算的误差也会更小，从而产生更好的搜索质量。
 
 <div style="text-align: center">
-<img src="/pic/PQ9.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/PQ9.png"/>
 </div>
 
 可以认为我们实际上是将整个数据集划分为几个更小的数据集后，再对每一个分区进行PQ压缩。当我们搜索时，我们会选择`probe`个距离最近的分区(通过计算与centroid之间的距离决定),同样的计算Query与对应centroid的残差，并使用这个残差在该分区进行PQ搜索，在完成所有分区的搜索后，返回距离最近的K个向量。
 
 <div style="text-align: center">
-<img src="/pic/PQ10.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/PQ10.png"/>
 </div>
 
 这里之所以选择`probe`个距离最近的分区而不是选择最近的那一个分区，是因为作者在论文中提到

@@ -28,7 +28,7 @@ DuckDB的MVCC实现来自于[论文](https://db.in.tum.de/~muehlbau/papers/mvcc.
    对于每个算子，这个global和local代表的具体含义都会一些不同，后面具体讲增删改查的时候会进行描述。因为DuckDB的table格式可以划分为rowGroups -> rowGroup -> column -> segment。所以实际上每一个单元都有一个相应的state进行追踪。
 
 <div style="text-align: center">
-<img src="/pic/duckdb/mvcc-state.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/mvcc-state.png"/>
 </div>
 
 2. **DuckDB的local storage**
@@ -37,14 +37,14 @@ DuckDB的MVCC实现来自于[论文](https://db.in.tum.de/~muehlbau/papers/mvcc.
     1. 增加事务的并发度。
     2. rollback时几乎无成本。
 <div style="text-align: center">
-<img src="/pic/duckdb/mvcc-local-storage.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/mvcc-local-storage.png"/>
 </div>
 
 3. **DuckDB的MVCC粒度**
 
     DuckDB的的MVCC粒度是对`Segment`而言的，即每一个column中的部分数据，会有一个`version info`记录着它是被哪个事务加入的，又是被哪个事务删除的。同时还会有一个`Update Segment`记录着它的Update Version.
 <div style="text-align: center">
-<img src="/pic/duckdb/mvcc-singualrity.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/mvcc-singualrity.png"/>
 </div>
 
 ## MVCC
@@ -85,12 +85,12 @@ DuckDB会为每一个新创建的transaction赋两个值。
 4. **Txn4** Thomas 向 Andy 转1元
 
 <div style="text-align: center">
-<img src="/pic/duckdb/mvcc-init.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/mvcc-init.png"/>
 </div>
 
 我们假设**Txn1**, **Txn4**已经commit， 而 **Txn2**, **Txn3**仍在执行，并且**Txn1**, **Txn4**在`T1`, `T2`commit，而**Txn2**, **Txn3**在`T3`,`T4`开启了事务。他们的`transaction id`为一个十分大的数。那么此时整体的version info 如下图所示。
 <div style="text-align: center">
-<img src="/pic/duckdb/mvcc-version-info.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/mvcc-version-info.png"/>
 </div>
 
 我们可以看到每一个事务都有一个对应的`Undo Buffer`,同时每一版本的信息都有一个链表来进行维护。我们下面来考虑事务**Txn3**的执行情况。
@@ -155,7 +155,7 @@ if (!parallel) {
 2. 非并行化，每一个算子直接往全局的存储空间进行插入。
 
 <div style="text-align: center">
-<img src="/pic/duckdb/mvcc-insert-1.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/mvcc-insert-1.png"/>
 </div>
 
 这里我只介绍非并行化，因为插入的流程是一样的，只是处理的方式不同，因此如果你理解了非并行化，那么你也理解了并行化的方式。
@@ -270,7 +270,7 @@ string DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bo
 在将数据添加到`table`后，我们将添加的信息加入到`UndoBuffer`中。格式为
 
 <div style="text-align: center">
-<img src="/pic/duckdb/mvcc-undo-insert.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/mvcc-undo-insert.png"/>
 </div>
 
 ### UndoBuffer Commit
@@ -422,7 +422,7 @@ void DuckTransaction::PushDelete(DataTable &table, ChunkVectorInfo *vinfo, row_t
 从上面的代码中我们可以看到我们会将当前的`transaction id`赋值给`deleted`数组中对应的元素，同时往`UndoBuffer`中添加对应的`Entry`, 即将删除的行号写到`UndoBuffer`中。
 
 <div style="text-align: center">
-<img src="/pic/duckdb/mvcc-delete-undo.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/mvcc-delete-undo.png"/>
 </div>
 
 同样的事务的提交为三个流程
@@ -600,7 +600,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 代码很长，但是实际干的事情就是一件事，将修改前的数据保存下来做成一个`UndoBuffer`的Entry写入`UndoBuffer`，然后直接本地修改，即`base_info`更新数据，然后将Entry插入到`base_info`的next。
 
 <div style="text-align: center">
-<img src="/pic/duckdb/mvcc-undo-update.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/mvcc-undo-update.png"/>
 </div>
 
 最后相同的流程

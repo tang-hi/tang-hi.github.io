@@ -19,7 +19,7 @@ description: 'LevelDB 是一个高效的KV数据库，本文将介绍LevelDB的�
 我们先看一下LevelDB整体的写流程是什么样子的.
 
 <div style="text-align: center">
-<img src="/pic/levelDB/write-overview.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/write-overview.png"/>
 </div>
 
 从图中可以看出levelDB采用经典的WAL方式来进行写入,即先将写入的操作写到log文件中,再将实际的数据写到内存中的`Memtable`中(`Memtable`采用skipList实现),当`Memtable`达到阈值后再将其转化为`ImmutableMemTable`,最终将其落盘持久化保存.
@@ -56,7 +56,7 @@ class LEVELDB_EXPORT WriteBatch {
 ````
 我们可以看到其本质就是一个**string**,我们会将写操作通过`Put`接口将其写入到rep_中,`WriteBatch`在内存中的格式如下图所示.
 <div style="text-align: center">
-<img src="/pic/levelDB/write-batch.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/write-batch.png"/>
 </div>
 
 从图中可以看到，WriteBatch由`SequenceNumber`,`count`以及`count`个KV对组成, 其中前8个byte为`SequenceNumber`(LevelDB中写操作的唯一自增编号)，紧跟着的4个byte为存储的KV对个数。KV对则由`tag`,`key-size And key's content`, `value-size And value's content`构成。
@@ -165,7 +165,7 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
 在生成了待写入的`WriteBatch`后,我们首先将其写入到`log文件`中。`log文件`的内部格式是通过block进行组织的，具体结构如下图所示。
 
 <div style="text-align: center">
-<img src="/pic/levelDB/log-format.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/log-format.png"/>
 </div>
 
 我们可以看到`log文件`是由一个个Block组成的，而每一个Block的大小都是固定的`32KB`，Block中存储着多个WriteBatch:头四个byte为校验和，后两个byte为data的长度，后续的一个byte为type(前七个byte被统称为`Header`)，最后剩下的就是data的数据，也就是WriteBatch中的`rep_`。
@@ -204,7 +204,7 @@ enum RecordType {
 
 因为`MemTable`的内部实现是**skiplist**，而**skiplist**只能回答**key**在不在，而不能回答**key**关联的**value**是什么，因此我们需要将用户输入的`(key,value)`转化为**skiplist**中内部使用的**key**。
 <div style="text-align: center">
-<img src="/pic/levelDB/internal-key.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/internal-key.png"/>
 </div>
 
 从图中可以发现，`key`和`value`中间被`(sequence number , tag)`隔开，这样的目的是为了后续在排序时，我们可以先按照`key`从小到大排序, 当`key`相同时，`(sequence number, tag)`按照由大到小排序，通过这种方式，永远是版本最新的在最前面（`(sequence number, tag)`越大，版本越新）。
@@ -299,7 +299,7 @@ struct SkipList<Key,Comparator>::Node {
 ````
 从代码中，我们看到`Node`有两个成员变量，一个是`key`，一个是`next_`，`key`没有什么好说的，主要需要理解的是`next_`,简单点来说，`next_`的长度等于Node的高度，`next_[i]`为`Node`在`level-i`的后继节点。通过下图，相信你可以更好理解。
 <div style="text-align: center">
-<img src="/pic/levelDB/node.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/node.png"/>
 </div>
 
 了解完`Node`后，我们还需要知道`SkipList::head_`,这个成员变量是一个dummy node,它的类型也是`Node`,它的`next_`点保存着每一个level的首节点。
@@ -351,7 +351,7 @@ ldb文件由五部分组成
 
 我们先看一下组成`data block`以及`index block`的基础组成部分。
 <div style="text-align: center">
-<img src="/pic/levelDB/block-layout.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/block-layout.png"/>
 </div>
 
 因为`data block`和`index block`都是由KV组成，`data block`的Key是skipList的`internal key`, Value是用户输入的`Value`.`index block`的Key是每个`data block`的最后一个Key, Value是`data block`的`handle`.
@@ -359,7 +359,7 @@ ldb文件由五部分组成
 我们可以详细看一下这个Block的结构组成,因为我们的Key是按照顺序的,因此我们可以使用仅存储两个Key不同的部分,从而减少空间占用,因此我们先存储两个Key相同的长度大小,需要存储的Key的大小,Value的长度大小,存储的Key的内容,存储的Value内容.我们可以通过下面的例子更好的阐述一下这个概念
 
 <div style="text-align: center">
-<img src="/pic/levelDB/block-demo.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/block-demo.png"/>
 </div>
 
 如图所示,因为`hello`以及`hellz`共享`hell`,因此对于`hellz`我们仅需要存储z即可.
@@ -370,7 +370,7 @@ ldb文件由五部分组成
 
 而`filter block`则是根据`data block`的大小生成布隆过滤器,默认每2K个大小生成一个布隆过滤器.它的存储结构为
 <div style="text-align: center">
-<img src="/pic/levelDB/filter-block.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/filter-block.png"/>
 </div>
 
 开始存着一系列的布隆过滤器,然后是各个布隆过滤器的offset数组,紧跟着offset的offset(通过该值找到offset,因为offset是数组是一个变值),最后跟的是这个`filter block`的元信息(`data block`数据多大后产生一个布隆过滤器)
@@ -379,14 +379,14 @@ ldb文件由五部分组成
 
 最后的`Footer`的格式则为下图所示.
 <div style="text-align: center">
-<img src="/pic/levelDB/footer.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/footer.png"/>
 </div>
 
 `Footer`中存储着`filter index block`的指针以及`index block`的指针以及`magic number`
 
 在介绍完各个模块的磁盘结构后,我们可以看一下ldb文件的全貌,以及各部分之间的关系,如下图所示.
 <div style="text-align: center">
-<img src="/pic/levelDB/ldb-overview.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/ldb-overview.png"/>
 </div>
 
 在了解了整个全貌后,我们可以看一下整个生成的流程是怎么样的.

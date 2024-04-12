@@ -24,7 +24,7 @@ DuckDB与其他数据库不同，它将所有的信息都存储在了同一个�
 2. `MetaBlock` 是一个Block List，它的头8个字节表示 `next_block_id`。因此如果内容过多，我们可以使用这样一个Block list来存储。
 
 <div style="text-align: center">
-<img src="/pic/duckdb/meta-block.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/meta-block.png"/>
 </div>
 
 ### Field Reader
@@ -34,7 +34,7 @@ DuckDB与其他数据库不同，它将所有的信息都存储在了同一个�
 2. `total_size` 后续要读取的总字节数。
 
 <div style="text-align: center">
-<img src="/pic/duckdb/field-reader.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/field-reader.png"/>
 </div>
 
 ### Segment Tree 
@@ -42,14 +42,14 @@ DuckDB与其他数据库不同，它将所有的信息都存储在了同一个�
 `Segment`可以认为是一块数据，我们使用`SegmentTree`来对`Segment`进行管理，虽然它的名字叫做`SegmentTree`，但实际上它内部是使用`vector`来保存`Segment`的。并且会使用二分查找来寻找指定的`Segment`，因此这要求Segment是按序存储的。`SegmentTree`的另一个特点就是支持懒加载。它并不会一次性将要管理的`Segment`全部读取进来，相反，它会在需要时，才从磁盘中读取`Segment`.
 
 <div style="text-align: center">
-<img src="/pic/duckdb/segmenttree.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/segmenttree.png"/>
 </div>
 
 ## 文件结构
 
 这一节我们开始介绍`DuckDB`的文件结构。
 <div style="text-align: center">
-<img src="/pic/duckdb/header.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/header.png"/>
 </div>
 
 我们从图中可以看到`DuckDB`有三个`Header`，因为这三个Header并不影响我们理解表的存储，因此这里只是简单的介绍一下。
@@ -68,7 +68,7 @@ DuckDB与其他数据库不同，它将所有的信息都存储在了同一个�
 
 下面我们可以看到`Data`的存储,它由一个`schema count`和 `${schema_count}` 个`schema`组成，我们的表就存储在`schema`中。(schema在DuckDB中可以认为就是一个database) 
 <div style="text-align: center">
-<img src="/pic/duckdb/overview.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/overview.png"/>
 </div>
 我们继续看`schema`的存储结构，第一个字段就是`schema`的名称,随后跟着的就是该`schema`所拥有的各种类型的个数。下面我们简单介绍各种类型。有兴趣的可以自己看一下官网的定义。这里我们只关注`table`的数据.
 
@@ -81,7 +81,7 @@ DuckDB与其他数据库不同，它将所有的信息都存储在了同一个�
 我们继续查看`table`的结构
 
 <div style="text-align: center">
-<img src="/pic/duckdb/table_data.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/table_data.png"/>
 </div>
 
 我们从图中可以看到`table`中前三个字段分别是`catalog name`, `schema name`, `table name`. 我们通过这三个字段可以确定这个表属于哪一个文件(catalog)的哪一个数据库(schema)的哪一个表. 
@@ -90,7 +90,7 @@ DuckDB与其他数据库不同，它将所有的信息都存储在了同一个�
 ### Columns
 该字段保存的是`table`各个列的定义.
 <div style="text-align: center">
-<img src="/pic/duckdb/column-define.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/column-define.png"/>
 </div>
 我们可以看到,第一个字段保存的是column的数量,该字段后面紧跟着每个column的定义.我们下面来看一下各个字段的意义
 
@@ -105,7 +105,7 @@ DuckDB与其他数据库不同，它将所有的信息都存储在了同一个�
 ### table data
 
 <div style="text-align: center">
-<img src="/pic/duckdb/table_data.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/table_data.png"/>
 </div>
 
 因为索引以及表的实际数据一般都比较大,因此我们并没有在这里直接存储,而是存储了指向实际数据的指针(block-id, offset).
@@ -119,7 +119,7 @@ DuckDB与其他数据库不同，它将所有的信息都存储在了同一个�
 
 下面我们看一下`table data block`的实际数据存储的结构
 <div style="text-align: center">
-<img src="/pic/duckdb/row-group.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/row-group.png"/>
 </div>
 
 最开始存储的是一系列column数据的元信息（后面会介绍column data block的结构)，后两个个字段十分好理解，第一个存储着表的统计信息，另一个存储着 `row group` 数量。
@@ -139,7 +139,7 @@ DuckDB与其他数据库不同，它将所有的信息都存储在了同一个�
 
 我们继续看`column data block`的存储结构
 <div style="text-align: center">
-<img src="/pic/duckdb/column-data-block.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/column-data-block.png"/>
 </div>
 
 我们惊讶的发现这里仍旧不是实际存储数据的地方，存放的还是指针，这是为什么？原因在于实际的column数据是存放在`pure block`中的，即它没法像`meta block`那样有一个 `block list`，而每个block的大小是定死的，因此我们需要一个个block存储，这里的`data pointer`就充当了`block list`的链接作用。
@@ -157,7 +157,7 @@ DuckDB与其他数据库不同，它将所有的信息都存储在了同一个�
 
 
 <div style="text-align: center">
-<img src="/pic/duckdb/compress1.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/compress1.png"/>
 </div>
 
 ### Const  Column
@@ -174,7 +174,7 @@ uncompress column，即不压缩。对于像`uint32`, `uint8`这样的数据类�
 
 我们在这里将`dict`可以看作string pool，而offset则是对应的起始位置，而`offsets[i] - offsets[i-1]`即为长度。这么说有点抽象，我们举一个例子。
 <div style="text-align: center">
-<img src="/pic/duckdb/string-compress.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/string-compress.png"/>
 </div>
 
 这个例子里面我们一共有三个字符串 `foo` ,`bar` , `duckdb`
@@ -198,7 +198,7 @@ uncompress column，即不压缩。对于像`uint32`, `uint8`这样的数据类�
 
 ### RLE column and bitpacking
 <div style="text-align: center">
-<img src="/pic/duckdb/compress2.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/compress2.png"/>
 </div>
 
 RLE column相对简单，前面存储的是值，后面存储该值出现的次数。通过 `RLE count offset`将两者进行分隔。
@@ -207,7 +207,7 @@ bitpack column留给有兴趣的读者自己研究。
 
 ### Dictionary column
 <div style="text-align: center">
-<img src="/pic/duckdb/compress3.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/compress3.png"/>
 </div>
 
 如果你理解了`uncompress column`中string的存储方式，那你也会较为容易的理解`Dictionary column`， 其中dict含义保持不变，index Buffer则是之前提到的**offsets**,**bitpacking** 存储的则是该行对应的值是index Buffer中的第几个。通过 `dict.get(indexBuffer[bitpacking[i]])` 获得存储的值。

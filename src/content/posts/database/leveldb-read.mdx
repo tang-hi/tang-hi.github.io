@@ -19,7 +19,7 @@ description: 'LevelDB 是一个高效的KV数据库，本文将介绍LevelDB的�
 我们先看一下levelDB读操作的整体流程。
 
 <div style="text-align: center">
-<img src="/pic/levelDB/read-overview.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/read-overview.png"/>
 </div>
 
 我们首先会尝试从`MemTable`中读取对应的KV，如果没获取到，我们会从`ImmutableMemTable`中读取，如果仍旧没读到，我们就会尝试去`${version}.ldb`中获取对应的KV。
@@ -34,7 +34,7 @@ description: 'LevelDB 是一个高效的KV数据库，本文将介绍LevelDB的�
 还记得我们在 [LevelDB(1) -- 写](../leveldb-write/)中对于`Memtable的`描述,它会将用户输入的Key转化为**InternalKey**再插入，因此为了查询的时候，Key保持一致。我们也需要先将Key转化为InternalKey。
 
 <div style="text-align: center">
-<img src="/pic/levelDB/internal-key.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/internal-key.png"/>
 </div>
 
 在这里`sequence number`为最大值（这样我们才能获取最新的数据），如果用户有指定`snapshot`。那么这个`sequence number`则为该`snapshot`的值。tag则为`kValueTypeForSeek`* ,因为我们排序数据项时会考虑序列号, 而且会在 user_key 部分相等时按照 tag (由七个字节序列号后跟一个字节 ValueType 构成)降序排列(**tag 越大 internal_key 越小**), 所以我们应该使用**最大**的 ValueType,这样调用 MemTable.Seek(k) 确保找到的第一个大于等于 k 的数据项(`MemTable` 中数据项从小到大排序)就是我们要找的数据项.
@@ -171,7 +171,7 @@ SkipList<Key,Comparator>::FindGreaterOrEqual(const Key& key, Node** prev)
 
 首先要做的就是要确定哪些文件。从下图中我们可以看到，对于Level-0以及其他Level，确定要读取的文件是不一样的。
 <div style="text-align: center">
-<img src="/pic/levelDB/determin-file.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/determin-file.png"/>
 </div>
 
 因为Level-0中的文件key之间可能有重叠，因此我们需要一个个进行检查，而对于Level-x(x>1)来说，每个文件不相交，因此我们可以对他们按key排序后，进行二分查找，从而加快查找的速度。
@@ -394,7 +394,7 @@ Cache::Handle* LRUCache::Lookup(const Slice& key, uint32_t hash) {
 反序列化LDB文件的入口函数为`Table::Open`, 我们配合着LDB的`Layout`来理解LDB的反序列化。
 
 <div style="text-align: center">
-<img src="/pic/levelDB/ldb-overview.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/ldb-overview.png"/>
 </div>
 
 

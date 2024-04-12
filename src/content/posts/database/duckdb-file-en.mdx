@@ -25,7 +25,7 @@ DuckDB stands out from other databases by storing all of its data within a singl
 2. On the other hand, a `MetaBlock` functions as a collection of blocks with its first 8 bytes indicating the value of 'next_block_id'. By employing such block lists when necessary due to excessive content volume.
 
 <div style="text-align: center">
-<img src="/pic/duckdb/meta-block.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/meta-block.png"/>
 </div>
 
 ### Field Reader
@@ -35,7 +35,7 @@ In certain cases, when retrieving data from a Block, we employ a technique calle
 2. `total_size`: Represents the overall size (in bytes) of the subsequent data retrieval process.
 
 <div style="text-align: center">
-<img src="/pic/duckdb/field-reader.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/field-reader.png"/>
 </div>
 
 ### Segment Tree 
@@ -43,7 +43,7 @@ In certain cases, when retrieving data from a Block, we employ a technique calle
 The concept of `Segment` refers to a block of data, and we use a data structure called `segment tree` (or "SegementTree") for managing these segments. Despite its name, a segment tree internally utilizes vectors for storing segments rather than trees. Moreover, binary search is employed for locating specific segments within this structure; thus, it assumes that segments are stored in an ordered manner. One notable characteristic of segment trees is their support for lazy loading: instead of reading all segments into memory at once, they retrieve individual segments from disk on-demand.
 
 <div style="text-align: center">
-<img src="/pic/duckdb/segmenttree.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/segmenttree.png"/>
 </div>
 
 ## 文件结构
@@ -51,7 +51,7 @@ The concept of `Segment` refers to a block of data, and we use a data structure 
 In this section, we will begin by introducing the file structure of DuckDB.
 
 <div style="text-align: center">
-<img src="/pic/duckdb/header.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/header.png"/>
 </div>
 
 Looking at the diagram, we notice that DuckDB has three headers - but don't worry! These headers won't confuse us when it comes to understanding how tables are stored; they're just some extra information we'll briefly cover.
@@ -71,7 +71,7 @@ Now let's move on to DataBaseHeader:
 Now, let's take a look at how the actual data is stored. It consists of a `schema count` and `${schema_count}` individual `schemas`. In DuckDB, think of a schema as a database.
 
 <div style="text-align: center">
-<img src="/pic/duckdb/overview.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/overview.png"/>
 </div>
 
 Let's take a closer look at how schemas are stored in DuckDB databases. The first piece of information is the schema's name, followed by a count of each type it contains. Now let's briefly go over these different types together! For more detailed definitions, feel free to visit their official website.
@@ -85,7 +85,7 @@ Let's take a closer look at how schemas are stored in DuckDB databases. The firs
 Now, let's shift our attention specifically to tables and explore their structures further!
 
 <div style="text-align: center">
-<img src="/pic/duckdb/table_data.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/table_data.png"/>
 </div>
 
 From the diagram, we can observe that the first three item in the table are labeled as `catalog name`,`schema name` and `table name`. By using these three items, we can identify to which file (catalog), database (schema), and specific table this particular one belongs. The field named "constraints" provides information about certain restrictions imposed on this table, such as `Not Null` or `Unique` properties. However, for now, let's not dive too deep into this aspect; instead, let's shift our attention towards exploring what lies within both the 'Columns' section and 'table data' field.
@@ -94,7 +94,7 @@ From the diagram, we can observe that the first three item in the table are labe
 Within this section resides a collection of definitions for each individual column found within a given table.
 
 <div style="text-align: center">
-<img src="/pic/duckdb/column-define.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/column-define.png"/>
 </div>
 
 We can observe that in our dataset, the first attribute called `column count` which represents how many columns exist in total within our dataset file; following this attribute are individual definitions for each specific column present within our dataset file.
@@ -112,7 +112,7 @@ Once we have obtained information regarding the types and characteristics of eac
 ### table data
 
 <div style="text-align: center">
-<img src="/pic/duckdb/table_data.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/table_data.png"/>
 </div>
 
 Since indexes and table data are usually large in size, we don't store them directly here. Instead, we store pointers (block-id, offset) that point to their actual locations.
@@ -127,7 +127,7 @@ Let's explain each field using this diagram:
 Now let's examine how `table data block` stores its actual structured information.
 
 <div style="text-align: center">
-<img src="/pic/duckdb/row-group.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/row-group.png"/>
 </div>
 
 The initial storage contains metadata about a series of column data (the structure of the column data block will be explained later). The last two fields are easy to understand. The first one stores statistical information about the table, and the other one stores the number of 'row groups'.
@@ -148,7 +148,7 @@ Now let's take a look at the storage structure of `row groups`.
 Let's continue with the storage structure of `column data blocks`.
 
 <div style="text-align: center">
-<img src="/pic/duckdb/column-data-block.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/column-data-block.png"/>
 </div>
 
 To our surprise, we discovered that this isn't actually where the data itself is stored; it still holds pointers instead! But why? Well, it turns out that the real column data resides in what's called "pure blocks." Unlike their counterparts known as "meta blocks," these pure blocks don't have a convenient way to keep track of all their contents using a simple list structure like before.
@@ -165,7 +165,7 @@ As usual, let's explain the meanings of each field:
 Now, we've finally arrived at the very heart of it all—the block housing our precious columnar data! However, please note that its storage format can vary depending on which compression technique was employed during processing. I'll briefly introduce a few common types here, but if you're curious about others, feel free to explore them further on your own!
 
 <div style="text-align: center">
-<img src="/pic/duckdb/compress1.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/compress1.png"/>
 </div>
 
 ### Const  Column
@@ -184,7 +184,7 @@ For strings, the first two fields give us the position of the dictionary:
 Here, we can consider the dictionary as a string pool and offsets as corresponding starting positions, where `offsets[i] - offsets[i-1]` represents the length. This might sound abstract, so let's take an example.
 
 <div style="text-align: center">
-<img src="/pic/duckdb/string-compress.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/string-compress.png"/>
 </div>
 
 In this example, we have three strings: `foo`, `bar`, and `duckdb`. 
@@ -207,7 +207,7 @@ Now, let's address a potential issue: what if a string exceeds the maximum allow
 
 ### RLE column and bitpacking
 <div style="text-align: center">
-<img src="/pic/duckdb/compress2.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/compress2.png"/>
 </div>
 
 RLE column is relatively simple, with the values stored in the front and the number of occurrences of each value stored in the back. They are separated by `RLE count offset`.
@@ -216,7 +216,7 @@ As for bitpack columns, I'll let curious readers delve into that topic themselve
 
 ### Dictionary column
 <div style="text-align: center">
-<img src="/pic/duckdb/compress3.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/compress3.png"/>
 </div>
 
 If you grasp how strings are stored in "uncompress column," understanding "Dictionary column" becomes much easier as well. In this case, the term 'dict' retains its original meaning while 'index Buffer' refers to what was previously mentioned as 'offsets' and 'bitpacking.' It represents which position within the index Buffer corresponds to each row's value. By using `dict.get(indexBuffer[bitpacking[i]])`, we can retrieve the stored value.

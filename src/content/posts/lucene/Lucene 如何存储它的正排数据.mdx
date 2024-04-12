@@ -24,7 +24,7 @@ description: '本文将介绍Lucene9.6如何存储它的正排索引，以帮助
 简单来说，正排索引就是可以通过docID 查询到对应的文档。我们可以将其类比为键值对（Key-Value），其中docID为Key，文档内容为Value。
 
 <div style="text-align: center">
-<img src="/pic/lucene-forward/doc-first.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/doc-first.png"/>
 </div>
 
 因此，Lucene的正排索引在磁盘中的布局必须能够通过docID快速定位到文档的内容。
@@ -151,7 +151,7 @@ final long infoAndBits = (((long) info.number) << TYPE_BITS) | NUMERIC_DOUBLE;
 
 
 <div style="text-align: center">
-<img src="/pic/lucene-forward/bufferedDocs.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/bufferedDocs.png"/>
 </div>
 
 当处理完每篇文档的字段后，我们可以认为我们已经将这篇文档缓存在了内存中，而后我们需要做的就是对正排索引进行收尾工作，即将其flush到磁盘中。
@@ -181,7 +181,7 @@ public void finishDocument() throws IOException {
 4. 判断是否需要将内存中的文档刷到磁盘中， 如果需要进行flush。
 
 <div style="text-align: center">
-<img src="/pic/lucene-forward/finishDocument1.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/finishDocument1.png"/>
 </div>
 
 通过上面的图和代码，我们应该已经明白了前三件事，后续我们重点关注第四件事。
@@ -201,7 +201,7 @@ private boolean triggerFlush() {
 
 从这里开始，我们开始真正了解，Lucene是如何将他的正排数据保存在磁盘中。我们假设我们内存中一共缓存了三篇文档。
 <div style="text-align: center">
-<img src="/pic/lucene-forward/flush-overview.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/flush-overview.png"/>
 </div>
 
 ````java
@@ -239,7 +239,7 @@ private void flush(boolean force) throws IOException {
 其中4,5为临时文件，并不会出现在最后的索引文件中，仅仅起到暂时存储数据的任务。具体内存中各变量的值，以及需要写的磁盘文件可见下图。
 
 <div style="text-align: center">
-<img src="/pic/lucene-forward/wait-to-flush.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/wait-to-flush.png"/>
 </div>
 
 首先我们会将该chunk所保存的文档数以及该chunk在fdt文件中的起始位置写到文件seg-xx-doc_ids,seg-xx-file_pointers中。
@@ -265,7 +265,7 @@ void writeIndex(int numDocs, long startPointer) throws IOException {
 写完文件seg-xx-doc_ids,seg-xx-file_pointers后的状态可参考下图。
 
 <div style="text-align: center">
-<img src="/pic/lucene-forward/index-writer.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/index-writer.png"/>
 </div>
 
 在写完文件seg-xx-doc_ids,seg-xx-file_pointers后，我们需要将缓存的文档内容写入文件fdt中。
@@ -322,7 +322,7 @@ private void writeHeader(
 写完fdt后的状态如下图所示
 
 <div style="text-align: center">
-<img src="/pic/lucene-forward/fdt.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/fdt.png"/>
 </div>
 
 函数`flush`目前全部介绍完毕，Lucene就是这样处理一篇一篇的Doc,先缓存在内存中，当缓存一定数量后再flush到磁盘中。
@@ -373,7 +373,7 @@ void finish(int numDocs, long maxPointer, IndexOutput metaOut) throws IOExceptio
 Lucene首先会给文件seg-xx-doc_ids,seg-xx-file_pointers写上`Footer`标记写入完成。同时`Footer`也可以保护文件的完整性。
 
 <div style="text-align: center">
-<img src="/pic/lucene-forward/temp-footer.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/temp-footer.png"/>
 </div>
 
 随后我们会像fdx以及fdm中写入
@@ -460,7 +460,7 @@ void finish(int numDocs, long maxPointer, IndexOutput metaOut) throws IOExceptio
 同样的方式将seg-xx-file_pointers中保存的内容压缩后写入fdx中， 并将解压所需要的元信息写入fdm，并将fdx以及fdt下一个待写入的位置写入fdm。
 最终的状态如下图所示
 <div style="text-align: center">
-<img src="/pic/lucene-forward/fdx-finish.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/fdx-finish.png"/>
 </div>
 从图中，我们注意到fdm的`Header`后的`chunkSize`并没有在上述代码中体现，这是因为这个变量是在创建fdm时就写入的。
 
@@ -479,11 +479,11 @@ public void finish(int numDocs) throws IOException {
 ````
 最后完整的的索引文件如下图所示
 <div style="text-align: center">
-<img src="/pic/lucene-forward/finish-write.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/finish-write.png"/>
 </div>
 
 ### Overview
 最后给出一张索引文件的概略以及相互的关系图
 <div style="text-align: center">
-<img src="/pic/lucene-forward/overview.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/overview.png"/>
 </div>

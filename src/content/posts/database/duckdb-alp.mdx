@@ -18,7 +18,7 @@ description: 'DuckDB 是一款开源 OLAP 数据库。与 SQLite 类似，本文
 DuckDB采用了论文 [ALP](https://dl.acm.org/doi/pdf/10.1145/3626717) 中所提出的方法来对浮点数进行压缩，各方面都取得了不错的进展，这篇博客将介绍ALP中的压缩方法。
 
 <div style="text-align: center">
-<img src="/pic/duckdb/alp-compare.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/alp-compare.png"/>
 </div>
 
 ## 前置知识
@@ -36,7 +36,7 @@ DuckDB采用了论文 [ALP](https://dl.acm.org/doi/pdf/10.1145/3626717) 中所�
    
 
 <div style="text-align: center">
-<img src="/pic/duckdb/double-represent.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/double-represent.png"/>
 </div>
 我们通过这三部分可以得到浮点数的值为
 $$
@@ -62,7 +62,7 @@ $$
 
  但是这样的转换方式，因为计算机对浮点数表示的精度原因。我们没有办法在解压的时候获取于原来一样的数值，如下图所示。
 <div style="text-align: center">
-<img src="/pic/duckdb/loss.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/loss.png"/>
 </div>
  我们可以看到解压后的数据与压缩前的数据存在细微的差别，这种有损压缩对于金融相关的业务而言是不可接受的。因此我们需要找到一个方法
  能够对其进行无损压缩，目前最常用的方式就是增加系数。
@@ -73,7 +73,7 @@ $$
   当第一种方式无法进行有效压缩时, 我们会采取分部分进行压缩。这是因为通过观察我们发现，在一组浮点数中，指数位的方差较小，也就是指数位的值较为相似。 因此我们可以对
   浮点数的数据集进行采样，决定一个分割点，左半部分是相似的指数位，我们对其使用`dictionary encoding`， 而对于右半部分，我们使用`bit packing`进行压缩。
   <div style="text-align: center">
-  <img src="/pic/duckdb/alprd.png"/>
+  <img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/alprd.png"/>
   </div>
   通过这种方式我们也能进行有效压缩
 
@@ -132,7 +132,7 @@ $$
   2. P 位左边的二进制使用`dictionary encode`进行压缩
   3. P 位右边的二进制使用`bit packing`进行压缩
   <div style="text-align: center">
-  <img src="/pic/duckdb/alprd.png"/>
+  <img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/alprd.png"/>
   </div>
 
 

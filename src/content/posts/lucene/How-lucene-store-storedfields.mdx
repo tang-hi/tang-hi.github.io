@@ -25,7 +25,7 @@ Since the main focus of this article is the storage format of the forward index 
 Simply put, a forward index is a structure that allows querying the corresponding document through `docID`. We can compare it to a key-value pair, where `docID` is the key and the document content is the value.
 
 <div style="text-align: center">
-<img src="/pic/lucene-forward/doc-first.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/doc-first.png"/>
 </div>
 
 Therefore, the layout of Lucene's forward index on the disk must allow quick location of the document content through `docID`.
@@ -151,7 +151,7 @@ final long infoAndBits = (((long) info.number) << TYPE_BITS) | NUMERIC_DOUBLE;
 When the field is of fixed length, we will directly write it into `bufferedDocs`. But when the field is variable length, we will first write the number of bytes occupied by this value into `bufferedDocs`, and then write this value into `bufferedDocs`. 
 
 <div style="text-align: center">
-<img src="/pic/lucene-forward/bufferedDocs.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/bufferedDocs.png"/>
 </div>
 
 After processing all the fields in each document, we can consider that we have buffered this document in memory, and then we need to finalize the forward index, that is, flush it to the disk. The function for finalizing the forward index of the document is `finishDocument`.
@@ -181,7 +181,7 @@ In this function, we will find that it does four things:
 4. Determine whether it is necessary to flush the documents in memory to the disk. If a flush is needed, it is performed.
 
 <div style="text-align: center">
-<img src="/pic/lucene-forward/finishDocument1.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/finishDocument1.png"/>
 </div>
 
 By the above diagram and code, we should have understood the first three points. Next, we will focus on the fourth point.
@@ -203,7 +203,7 @@ From the code, we can see that when the number of Docs cached in memory **reache
 From here, we start to really understand how Lucene saves its forward data on the disk. Let's assume that we have cached three documents in memory.
 
 <div style="text-align: center">
-<img src="/pic/lucene-forward/flush-overview.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/flush-overview.png"/>
 </div>
 
 ````java
@@ -244,7 +244,7 @@ The files we need to write to the disk are five in total:
 Among them, 4 and 5 are temporary files and will not appear in the final index file. They only serve the task of temporarily storing data. The specific values of each variable in memory and the disk files that need to be written can be seen in the following figure.
 
 <div style="text-align: center">
-<img src="/pic/lucene-forward/wait-to-flush.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/wait-to-flush.png"/>
 </div>
 
 First, we will write the number of documents saved in this chunk and the starting position of this chunk in the fdt file to the files seg-xx-doc_ids and seg-xx-file_pointers.
@@ -272,7 +272,7 @@ We notice that when writing filePointers, we store not the actual value but the 
 The state after writing the files seg-xx-doc_ids and seg-xx-file_pointers is as shown in the following figure.
 
 <div style="text-align: center">
-<img src="/pic/lucene-forward/index-writer.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/index-writer.png"/>
 </div>
 
 After writing the files seg-xx-doc_ids and seg-xx-file_pointers, we need to write the cached document content into the fdt file.
@@ -331,7 +331,7 @@ We can see that we will write `docBase`, `numBufferedDocs`, `dirtyBit`, `slicedB
 The state after writing fdt is as shown in the following figure.
 
 <div style="text-align: center">
-<img src="/pic/lucene-forward/fdt.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/fdt.png"/>
 </div>
 
 The function `flush` has been fully introduced. This is how Lucene processes one Doc after another, first caching them in memory, and then flushing them to the disk when a certain number is cached.
@@ -383,7 +383,7 @@ void finish(int numDocs, long maxPointer, IndexOutput metaOut) throws IOExceptio
 Lucene will first write a `Footer` to the files seg-xx-doc_ids and seg-xx-file_pointers to mark the completion of writing. Also, the `Footer` can protect the integrity of the file.
 
 <div style="text-align: center">
-<img src="/pic/lucene-forward/temp-footer.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/temp-footer.png"/>
 </div>
 
 Then we will write into fdx and fdm.
@@ -473,7 +473,7 @@ The same way, compress the content saved in the file seg-xx-file_pointers and wr
 The final state is as shown in the following figure.
 
 <div style="text-align: center">
-<img src="/pic/lucene-forward/fdx-finish.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/fdx-finish.png"/>
 </div>
 From the diagram, we notice that the `chunkSize` after the `Header` of fdm is not reflected in the above code. This is because this variable is written when fdm is created.
 
@@ -492,7 +492,7 @@ public void finish(int numDocs) throws IOException {
 ````
 Finally, the complete index file is as shown in the following figure.
 <div style="text-align: center">
-<img src="/pic/lucene-forward/finish-write.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/finish-write.png"/>
 </div>
 
 ### Overview
@@ -500,5 +500,5 @@ Finally, the complete index file is as shown in the following figure.
 Finally, here is a schematic diagram of the index file and its relationships.
 
 <div style="text-align: center">
-<img src="/pic/lucene-forward/overview.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/overview.png"/>
 </div>

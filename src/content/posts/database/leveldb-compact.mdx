@@ -239,7 +239,7 @@ void DBImpl::BackgroundCompaction() {
 在获得需要`Compact`的文件后，我们需要在上一层寻找与当前层重叠的文件作为一个整体一起compact。如下图所示。
 
 <div style="text-align: center">
-<img src="/pic/levelDB/pick-level.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/pick-level.png"/>
 </div>
 
 在得到上一层准备被`Compact`的文件后，我们会获得key的范围，如上图所示，一开始`Level-x`的范围为（50-700），在得到`Level-x+1`准备被Compact的文件后,范围来到了(50-720)。在某些情况下，我们在**不改变`Level-x+1`准备被Compact的文件数**的前提下，从`Level-x`中选择更多的文件来进行`Compact`，从而使得`Compact`的效率更高。之所以不改变`Level-x+1`准备被Compact的文件数，是为了防止无限制的循环下去，从而导致`Level-x`和`Level-x+1`的所有文件全部都需要进行`Compact`。
@@ -651,7 +651,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
 在这里`CURRENT`文件记录着最新的`MANIFEST`文件名。
 
 <div style="text-align: center">
-<img src="/pic/levelDB/current-file.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/current-file.png"/>
 </div>
 
 在得到了最新的`MANIFEST`文件名后，我们就可以调用`VersionSet::Recover`读取`MANIFEST`文件
@@ -712,12 +712,12 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
 `Manifest`的文件格式与LOG文件保持一致，LOG文件的具体格式如下图所示。
 
 <div style="text-align: center">
-<img src="/pic/levelDB/log-format.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/log-format.png"/>
 </div>
 
 而里面的data则是`VersionEdit`的序列化形式（**里面的tag可能出现多次**）。
 <div style="text-align: center">
-<img src="/pic/levelDB/version-edit.png"/>
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/version-edit.png"/>
 </div>
 
 在反序列化`VersionEdit`后，我们可以将所有的`VersionEdit`合并给一个`Version`,本质上就是把`VersionEdit`的新增文件以及删除文件，compact_pointer,和现有的`Version`进行合并。
