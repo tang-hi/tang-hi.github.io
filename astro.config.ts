@@ -15,7 +15,7 @@ export default defineConfig({
   prefetch: true,
   markdown: {
     shikiConfig: {
-      theme: 'one-dark-pro',
+      theme: 'github-light',
       langs: [],
       wrap: true
     }

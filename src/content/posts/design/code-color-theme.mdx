@@ -1,0 +1,171 @@
+---
+title: 设计一款自己的代码配色
+pubDate: 2024-06-29
+categories: 
+  - Design
+  - Color
+  - Tools
+  - VsCode 
+description: '从色彩的基本知识开始, 设计出自己专属的代码配色'
+---
+
+最近看了一本设计相关的科普读物[写给大家看的设计书](https://book.douban.com/subject/26657933/), 
+因此萌生了利用所学的知识, 设计一款代码配色。
+
+<div style = "text align: left">
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/color-scheme.jpg"/>
+</div>
+
+整个过程相当简单，如果目标只是设计出一款不丑的配色。那么在了解基本原理后, 大概10分钟就可以完成。
+
+## 前置知识
+
+### 色轮的概念
+
+色轮是由三原色(红，绿，蓝)组成的。假定我们在一个圆环上只放置这三种颜色, 我们可以得到如下的色轮。 我们再对这三种颜色其进行两两组合，我们就有了六种颜色。
+我们使用上述的方法不断重复下去，我们就得到了完整的色轮。
+<div style="display: flex; justify-content: center; align-items: center">
+    <div style = "text align: left">
+        <img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/color_wheel_1.png"/>
+    </div>
+    <div style = "text align: left">
+        <img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/color_wheel_2.png"/>
+    </div>
+    <div style = "text align: left">
+        <img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/color_wheel_4.jpg"/>
+    </div>
+</div>
+
+### 暗色和亮色
+
+上述色轮的概念仅仅只是色调，我们可以通过往色调的基础上添加黑色或者白色，来得到暗色和亮色。这样我们就可以得到更多的颜色。
+下面则是一个简单的例子(从左至右依次是，原色调，暗色，亮色)。
+<div style = "text align: left">
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/dark-light.jpg"/>
+</div>
+
+### 互补色(complementary)
+
+色轮上相对的颜色即为互补色。在设计中我们往往采用一种作为主色，而另一种颜色用于强调。我们从下面的例子中，可以直观感受到互补色的对比。
+<div style = "text align: left">
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/complementary-color-banner.webp"/>
+</div>
+
+### 三色组(Triadic)
+
+在色轮上，我们可以找到三种颜色，它们之间的角度相差120度，这三种颜色就是三色组。三色组的颜色搭配会显得和谐, 看上去令人愉悦。
+比如红，黄，蓝就是一个三色组。儿童产品往往就会采用这种组合，最经典的例子就是超人。
+<div style = "text align: left">
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/superman.avif"/>
+</div>
+
+### 分裂互补三色组(Split)
+
+分裂互补三色组，是从色轮的一边选择一种颜色，再在色轮上找到他的互补色，但是并不直接使用这个互补色，而是使用这个互补色两侧的颜色。
+这样的组合往往会有一种更为细致的颜色边界。可以通过下面的例子，更直观的感受这一点。
+<div style = "text align: left">
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/split-complementry.jpg"/>
+</div>
+
+### 类似色(Analogous)
+
+类似色是指在色轮上相邻的颜色。因为这种颜色组合有相同的基础色，所以这种颜色组合看上去会很和谐，但是缺少对比。
+因此在设计中，我们往往会加入一些对比色，来增加视觉效果。下面的这幅画就是类似色的组合。
+<div style = "text align: left">
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/analogous.jpg"/>
+</div>
+
+## 开始设计
+
+在介绍了上述的基本知识后，我们就可以开始设计我们的代码配色了。
+
+### 颜色配置文件
+
+**VSCode** 的颜色配置在`setting.json`中, 我们可以通过 `cmd + shift + P` 唤起**VSCode**的命令面板, 然后输入setting, 找到我们的配置文件。
+<div style = "text align: left">
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/20240629163617.png"/>
+</div>
+
+然后在`setting.json`中增加一个配置选项
+
+```json
+"editor.tokenColorCustomizations": {
+
+    "[Default Light+]": {  // 这里的Default Light+ 是你当前使用的主题
+        "keywords": "#C752A5", // 关键字的配色
+        "comments": "#A6B3E2", // 注释的配色
+        "variables": "#3E4D19", // 变量的配色
+        "functions": "#52A5C7", // 函数的配色
+        "types": "#C46E4A",  // 类型的配色
+        "strings": "#C7526A", // 字符串的配色
+        "numbers": "#7F6D29", // 数字的配色
+    },
+}
+```
+
+### 配色选择 
+推荐使用Figma的色轮工具，可以很方便的找到你需要的颜色。[Figma色轮工具](https://www.figma.com/color-wheel/)
+
+我们先将所有的颜色都设置为黑色。
+<div style = "text align: left; width:auto; height:20%">
+    <img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/20240629164926.png"/>
+</div>
+
+#### 函数，关键字，变量
+因为我认为代码是由函数组成的，所以我决定将函数的颜色作为主色，同时我不想让整个配色显得太热烈，因此我选择了蓝色作为主色。最终选择了`#52A5C7`作为主色。
+这个颜色的三色组为`#C752A5`和`#A5C752`，我们可以将这两种颜色作为**关键字**和**变量**的配色。    
+<div style = "text align: left">
+    <img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/20240629170833.png"/>
+</div>
+
+呈现出的效果如下图所示
+<div style = "text align: left">
+    <img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/20240629171135.png"/>
+</div>
+
+可以看到变量的颜色过于亮了，我们可以将其调暗一些。最终选择了`#3E4D19`这一暗色作为变量的配色。
+
+#### 类型，注释
+函数和类型因为往往是在一起的，因此我们选择主色的补色，同时为了让注释不是那么显眼，我们选择了主色的相似色。
+从左至右依次为主色，补色，相似色。
+<div style="display: flex; justify-content: center; align-items: center">
+    <div style = "text align: left">
+        <img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/20240629172449.png"/>
+    </div>
+    <div style = "text align: left">
+        <img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/20240629172515.png"/>
+    </div>
+    <div style = "text align: left">
+        <img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/20240629172532.png"/>
+    </div>
+</div>
+
+呈现出的效果如下图所示  
+
+<div style = "text align: left">
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/20240629172712.png"/>
+</div>
+
+为了让效果更加和谐，我们修改了对应颜色的亮度，最终选择了`#A6B3E2`作为注释的配色，`#C46E4A`作为类型的配色。
+
+#### 字符串，数字
+为了让字符串, 数字和函数可以和谐共处，我们采用了主色的分裂互补三色组,并相应的修改了亮度。最终呈现的效果为
+
+<div style = "text align: left">
+<img src="https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/20240629173225.png"/>
+</div>
+
+#### 完整配置文件
+```json
+"keywords": "#C752A5",
+"comments": "#A6B3E2",
+"variables": "#3E4D19",
+"functions": "#52A5C7",
+"types": "#C46E4A",
+"strings": "#C7526A",
+"numbers": "#7F6D29",
+````
+
+## 总结
+当然色彩领域的知识还有很多, 我学到的也只是皮毛，但是能通过学到的知识创造出一款还看得过去的代码配色，也是一件令人开心的事情。
+希望这篇文章能够帮助到你，也希望你能够设计出一款属于自己的代码配色。
