@@ -1,0 +1,335 @@
+---
+title: fsync is Costly, But Don't Avoid It
+pubDate: 2024-08-20
+categories: 
+  - Interesting
+description: 'Is fsync slow, And If So, What Can You Do About It?'
+---
+
+# fsync is Costly, But Don't Avoid It
+
+Last week, our newly developed service experienced slow performance when processing real-time data. It took an unreasonably long time—up to 12 hours—to process just 8 million records. To simplify the process code for better readability, I've included a simplified version below.
+
+```c
+int
+process() {
+  // .........
+
+  // open many files, store the file descriptor in an array
+  int *fd = create_files(FILE_NUMBER, O_RDWR | O_CREAT);
+
+  // each file write some bytes and fsync
+  for (int i = 0; i < FILE_NUMBER; i++) {
+    if (write(fd[i], Buffer, 200) != 200) {
+      printf("Failed to write to file\n");
+      return -1;
+    }
+    if (fsync(fd[i]) == -1) {
+      printf("Failed to fsync file\n");
+      return -1;
+    }
+  }
+  
+
+  if (close_files(fd, FILE_NUMBER) != 0) {
+    printf("Failed to close files\n");
+    return -1;
+  }
+  // ......
+  return 0;
+}
+```
+
+At first glance, this code pattern is commonly seen in data-oriented systems and shouldn't cause any performance degradation. However, after a thorough investigation, I discovered that the root cause of the slow performance was the `fsync` system call, which is essential for guaranteeing data integrity but can significantly slow down system processes.
+
+Why is this the case? `fsync` is used so widely in storage systems that you'll find it in almost any codebase. But why is it a bottleneck for our service? To answer this question, I conducted a survey of `fsync` and wrote this blog to delve into the details.
+
+This blog will cover the following topics:
+
+1. What is `fsync`?
+2. How slow is `fsync`?
+3. Why does it impact our system so much?
+4. What can we do to alleviate its impact?
+5. Lessons Learned
+
+**Please note: All experiments were conducted on my home PC. The measured numbers may vary due to differences in hardware and operating systems. However, the results and conclusions should remain consistent.**
+
+
+## What is `fsync`?
+
+The Linux fsync(2) man page provides a clear explanation:
+
+> ```
+> fsync() transfers ("flushes") all modified in-core data of 
+> (i.e.,modified buffer cache pages for) the file referred to
+> by the filedescriptor fd to the disk device (or other permanent
+> storage device) so that all changed information can be retrieved
+> even if the system crashes or is rebooted. This includes writing
+> through or flushing a disk cache if present. The call blocks until
+> the device reports that the transfer has completed.
+> ```
+
+
+In short, `fsync` ensures data written to a file is safely stored on the storage device.  We can delve deeper by examining the code itself. Here's a snippet from the Linux kernel's [ext4/fsync.c](https://github.com/torvalds/linux/blob/master/fs/ext4/fsync.c) file. This code demonstrates how `fsync` works at a lower level.
+
+```c
+int ext4_sync_file(struct file *file, loff_t start, loff_t end, int datasync)
+{
+	int ret = 0, err;
+	bool needs_barrier = false;
+	struct inode *inode = file->f_mapping->host;
+  // ......
+
+	ret = file_write_and_wait_range(file, start, end);
+	if (ret)
+		goto out;
+
+	/*
+	 *  The caller's filemap_fdatawrite()/wait will sync the data.
+	 *  Metadata is in the journal, we wait for proper transaction to
+	 *  commit here.
+	 */
+	ret = ext4_fsync_journal(inode, datasync, &needs_barrier);
+
+issue_flush:
+	if (needs_barrier) {
+		err = blkdev_issue_flush(inode->i_sb->s_bdev);
+		if (!ret)
+			ret = err;
+	}
+out:
+	err = file_check_and_advance_wb_err(file);
+	if (ret == 0)
+		ret = err;
+	trace_ext4_sync_file_exit(inode, ret);
+	return ret;
+}
+```
+
+`ext4_sync_file` is the function will invoked when you call `fsync`. It involves 3 steps.
+
+1. `file_write_and_wait_range` will write all dirty pages belonging to the file to the disk.Then the dirty page will sit in the disk volatile cache (still will lost when power outrage)
+2. `ext4_fsync_journal` will write the inode's metadata to the disk. After this step, This file will still exist even when OS kernel is crash.
+3. `blkdev_issue_flush` will issue a flush operation to the block device and waits until it's finished. This operation will tell block device it should flush its volatile cache to the persistent storage.
+
+As long as the block device manufacturer adheres to the Linux contract, `fsync` will reliably ensure your data is safe and sound
+
+
+## How Slow is `fsync`?
+
+In this section, I’ll create a simple C program to measure the speed of `fsync`. The program will open a file, call `fsync` 10,000 times, and calculate the average `fsync` time. We’ll also compare the time it takes to write 200 bytes to files with and without using `fsync`
+
+```c 
+void
+fsync_speed() {
+  clr_pgcache();
+  int fd = open("file", O_RDWR | O_CREAT, 0666);
+  if (fd == -1) {
+    printf("Failed to open file\n");
+    return;
+  }
+
+  MEASURE_TIME_START();
+  for (int i = 0; i < 10000; i++) {
+    if (fsync(fd) == -1) {
+      printf("Failed to fsync file\n");
+      return;
+    }
+  }
+  MEASURE_TIME_END();
+  if (close(fd) == -1) {
+    printf("Failed to close file\n");
+    return;
+  }
+  if (remove("file") == -1) {
+    printf("Failed to remove file\n");
+    return;
+  }
+  unsigned long cost_ms = MEASURE_TIME_MS();
+  printf("fsync avg time: %ld ms\n", cost_ms);
+}
+
+int
+without_fsync() {
+  if (clr_pgcache() != 0) {
+    printf("Failed to clear page cache\n");
+    return -1;
+  }
+
+  // open many files, store the file descriptor in an array
+  int *fd = create_files(FILE_NUMBER, O_RDWR | O_CREAT);
+
+  MEASURE_TIME_START();
+  // each file write some bytes
+  for (int i = 0; i < FILE_NUMBER; i++) {
+    if (write(fd[i], Buffer, 200) != 200) {
+      printf("Failed to write to file\n");
+      return -1;
+    }
+  }
+  MEASURE_TIME_END();
+
+  if (close_files(fd, FILE_NUMBER) != 0) {
+    printf("Failed to close files\n");
+    return -1;
+  }
+
+  return MEASURE_TIME_US();
+}
+
+int
+with_fsync() {
+  if (clr_pgcache() != 0) {
+    printf("Failed to clear page cache\n");
+    return -1;
+  }
+
+  // open many files, store the file descriptor in an array
+  int *fd = create_files(FILE_NUMBER, O_RDWR | O_CREAT);
+
+  MEASURE_TIME_START();
+  // each file write some bytes
+  for (int i = 0; i < FILE_NUMBER; i++) {
+    if (write(fd[i], Buffer, 200) != 200) {
+      printf("Failed to write to file\n");
+      return -1;
+    }
+    if (fsync(fd[i]) == -1) {
+      printf("Failed to fsync file\n");
+      return -1;
+    }
+  }
+  MEASURE_TIME_END();
+
+  if (close_files(fd, FILE_NUMBER) != 0) {
+    printf("Failed to close files\n");
+    return -1;
+  }
+
+  return MEASURE_TIME_MS();
+}
+```
+
+The measurement results are shown below. 
+
+|     Test     | Fsync | Write  | Write(fsync) |
+| :----------: | :---: | :----: | :----------: |
+| Average time | 2 ms  | 430 us |    154 ms    |
+
+As Jeff Dean suggested in his famous article 'Latency Numbers Every Programmer Should Know,' we can consider `fsync` equivalent to [a disk seek](https://colin-scott.github.io/personal_website/research/interactive_latency.html). While `fsync` is relatively slow, it's the only way to guarantee our data is safely stored on the storage device.
+
+## Why does it impact our system so much?
+
+"As we saw in the previous section, `fsync` is relatively slow. However, nearly all storage systems, including databases, distributed file systems, and object storage, use `fsync` to ensure data integrity. How can they achieve high performance while using `fsync`? After careful investigation, I discovered that the issue lies not with `fsync` itself but with our design flaws.
+
+
+### 1. Too many files
+
+To achieve high concurrency, we divided the entire dataset into multiple Index Files called `Atomic Indexes`. We initially believed this would reduce thread contention, allowing multiple threads to read their respective `Atomic Indexes` without interfering with each other. However, this approach introduced a significant problem: we needed to call `fsync` for each file when dumping in-memory data to disk. A typical service we maintain contains hundreds of `Atomic Indexes`, so the time spent waiting for `fsync` to complete can easily outweigh the benefits of high concurrency.
+
+
+### 2. Misuse of  `fsync`
+
+`fsync` is a resource-intensive system call that should only be used for critical files that you cannot afford to lose. According to our design, the service will reply with real-time data even if the server crashes. Therefore, we can treat `Atomic Indexes` as files that can be regenerated, making it unnecessary to call `fsync` for them.
+
+## What can we do to alleviate its impact?
+
+Although in my case simply removing the `fsync` call provided significant performance improvements, I'm curious about other strategies for mitigating the expensive cost of `fsync`
+
+
+### Direct I/O
+
+One potential approach is to use Direct I/O, which bypasses the page cache and directly transfers data between the application and the block device. This could potentially reduce the overhead of `fsync`, as there would be no need to flush dirty pages. To validate this idea, I wrote the following code
+
+```c
+int
+direct_write_fsync() {
+  if (clr_pgcache() != 0) {
+    printf("Failed to clear page cache\n");
+    return -1;
+  }
+
+  // open many files, store the file descriptor in an array
+  int *fd = create_files(FILE_NUMBER, O_RDWR | O_CREAT | O_DIRECT);
+
+  MEASURE_TIME_START();
+  // each file write some bytes
+  for (int i = 0; i < FILE_NUMBER; i++) {
+    if (write(fd[i], Buffer, 200) != 200) {
+      printf("Failed to write to file\n");
+      return -1;
+    }
+    if (fsync(fd[i]) == -1) {
+      printf("Failed to fsync file\n");
+      return -1;
+    }
+  }
+  MEASURE_TIME_END();
+
+  if (close_files(fd, FILE_NUMBER) != 0) {
+    printf("Failed to close files\n");
+    return -1;
+  }
+
+  return MEASURE_TIME_MS();
+}
+```
+
+| Test         | Direct I/O | Write(fsync) |
+| ------------ | ---------- | ------------ |
+| Average Time | 153 ms     | 154 ms       |
+
+Unfortunately, our experiments showed that Direct I/O didn't provide significant performance improvements. While it's true that `fsync` wouldn't need to flush the page cache in this scenario, Direct I/O itself has increased overhead and may not fully utilize [delayed allocation](https://en.wikipedia.org/wiki/Allocate-on-flush). As a result, the time saved by skipping page cache flushing was offset by the slower Direct I/O writes, leading to negligible overall performance gains
+
+### io_uring
+
+Since `fsync` involves synchronizing data from the system cache to the disk, which can be a bottleneck, we can explore using io_uring to potentially improve performance. Introduced in Linux kernel version 5.1, io_uring allows submitting asynchronous I/O operations. The kernel worker threads handle these operations and notify the user space when they complete. I won't delve into the details of io_uring here, but you can refer to the [Kernel Documentation](https://kernel.dk/io_uring.pdf)for further information. Below, I'll showcase code that tests performance improvements using io_uring
+
+```c
+int
+io_uring() {
+  if (clr_pgcache() != 0) {
+    printf("Failed to clear page cache\n");
+    return -1;
+  }
+
+  int *fd = create_files(FILE_NUMBER, O_RDWR | O_CREAT);
+
+  struct io_uring ring;
+  if (setup_io_uring(&ring) != 0) {
+    printf("Failed to setup io_uring\n");
+    return -1;
+  }
+
+  MEASURE_TIME_START();
+  for (int i = 0; i < FILE_NUMBER; i++) {
+    submit_write_request(&ring, fd[i], 0, Buffer, BYTES_NUMBER);
+    submit_fsync_request(&ring, fd[i]);
+  }
+  wait_for_all_operations(&ring, 2 * FILE_NUMBER);
+  MEASURE_TIME_END();
+  close_files(fd, FILE_NUMBER);
+  return MEASURE_TIME_MS();
+}
+```
+
+| Test         | Direct I/O | Write(fsync) | Io_uring |
+| ------------ | ---------- | ------------ | -------- |
+| Average Time | 153 ms     | 154 ms       | 30 ms    |
+
+Our experimental results demonstrate that io_uring significantly improved performance. This is primarily due to the asynchronous nature of io_uring. Instead of waiting for each `fsync` call to return, we can submit I/O requests and then process them all at once when there are no other tasks to handle
+
+
+
+## Lessons Learned
+
+1. Avoid excessive file fragmentation.
+
+   Having too many files can quickly consume your operating system's file descriptors and introduce higher latency compared to reading from or writing to a single file. You can find the experimental code [here](https://gist.github.com/tang-hi/0fbf5ca3087beed9c501668caffd2e52). If your **critical** data is split across multiple files, the situation worsens. You'll spend significant time waiting for `fsync` to complete. Compared to the various problems caused by dividing data into multiple files, the minor advantage of multithreading is insignificant.
+
+2. Use `fsync` judiciously.
+
+   `fsync` is a resource-intensive system call. Use it sparingly but strategically. If you can't recover your data file once it's corrupted, `fsync` is essential to ensure its integrity. Otherwise, avoid using it and implement a mechanism to regenerate the file if necessary.
+
+3. Harness the power of `io_uring`.
+   `io_uring` is a powerful and user-friendly tool. Consider incorporating it into your next project.
