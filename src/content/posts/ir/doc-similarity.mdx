@@ -1,0 +1,187 @@
+---
+title: Back to Basic - 文档打分及检索优化
+pubDate: 2025-01-13
+categories: 
+  - Full Text Search
+  - tf-idf
+  - bm25
+  - 文本相关性
+description: '当用户在搜索框中输入Query后，我们应该如何基于用户的Query来对文档进行排序，
+又该如何快速的返回用户所需的结果？ 这篇文章会解释相关的基础知识。'
+---
+
+<link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/katex@0.15.2/dist/katex.min.css"
+    integrity="sha384-MlJdn/WNKDGXveldHDdyRP1R4CTHr3FeuDNfhsLPYrq2t0UBkUdK2jyTnXPEK1NQ"
+    crossorigin="anonymous"
+/>
+
+当用户进行检索时，他往往希望搜索引擎可以迅速返回他最需要的文档信息。在这个使用场景中，我们需要解决两个问题。
+1. 在确定Query的情况下，如何定量的给文档进行打分？
+2. 如何在上亿乃至上百亿的文档中快速的找到和用户Query最相关的文档？
+
+下面我们会从这两个问题出发，展示基于文本检索的搜索引擎是如何处理这两个问题(本文只做基础知识的介绍)。
+
+## 从头开始发明TF-IDF和BM25
+大多数人看到TF-IDF以及BM25的公式后，就会选择放弃理解公式的含义，而只是将其作为一个给定输入就会产生输出的黑盒来使用(尤其是BM25)。
+现在，我们通过再次"发明"的方式来理解这两个公式。
+
+### TF-IDF
+在给定Query的情况下，我们如何衡量一篇文档比另一篇文档更加相关呢？一个最显而易见的做法就是，对于一个给定的term，我们可以统计文档中这个term出现的次数。
+term出现的次数越多，那这篇文档的相关性越高。
+
+$$
+\text{score}(t,D) = \text{occurance}(t,D)
+$$
+
+那对于一个Query，我们如何衡量一个文档的相关性呢？我们可以将Query中的每个term的相关性加起来，即
+$$
+\text{score}(Q,D) = \sum_{t \in Q} \text{score}(t,D)
+$$
+
+对于仅仅使用term出现次数来衡量文档的相关性，有两个很明显的问题
+1. 我们对于Query中的每个term都是平等对待的，没有考虑哪些term更加重要。
+例如你的Query是"猫和老鼠"，检索出来的文档中很有可能是“和”这个词出现的次数最多的文档，这显然不是我们想要的。
+2. 文档所包含的term越多，它的相关性就越高，这显然是不合理的。
+例如你的Query是"猫和老鼠"，你可能搜出来一个完全无关的文档，仅仅因为这个文档很长，而它恰巧包含了"猫"和"老鼠"这两个词。
+
+
+为了解决第一个问题，我们需要给予Query中的term一个权重，而一个term的权重应该与他在整个文档集合中的稀缺性成正比。 
+如果一个term在很多文档中都出现，说明它是一个常用词，比如"这", "那"。 反之，如果一个term很少在文档中出现，那么它在整个Query中的权重就应该更高。
+
+那么我们如何衡量一个term在整个文档集合中的稀缺性呢？我们可以用包含这个term的文档**倒数**来衡量，即
+$$
+\text{importance}(t) = \frac{1}{\text{doc\_count}(t)}
+$$
+
+为了便于后续处理，我们可以将$$\text{importance}(t)$$ 乘以文档集合的总数进行归一化，即
+$$
+\text{importance}(t) = \text{(number of documents)} \times \frac{1}{\text{doc\_count}(t)}
+$$
+
+至此，我们就从头发明了IDF(Inverse Document Frequency)的概念。
+
+那么我们如何将IDF和TF结合起来呢？我们可以将TF乘以IDF，即
+
+$$
+\text{score}(t,D) = \text{occurance}(t,D) \times \text{importance}(t)
+                  = \text{tf}(t,D) \cdot \text{idf}(t,D)
+$$
+
+至此，TF-IDF的基本概念基本就讲完了。但是我们还需要对上述公式进行一些调整，以便更好的适应实际场景。
+我们需要对IDF取log，平滑化处理。具体的公式如下
+
+$$
+\text{idf}(t,D) = \log{\frac{N}{|{d \in D : t \in d}|}}
+$$
+
+为什么要取`log`呢？ 我们可以从下图中看到，当DF较小时，DF轻微的变化会导致IDF的剧烈变化，这显然是不合理的。
+例如，当DF从1变到2时，IDF的数值减少了一半，这显然是不符合常识的，
+在一个较大的文档集合中，一个term在两个文档中出现和在一个文档中出现的重要性应该是差不多的。 因此我们需要取`log`使得IDF的变化更加平滑。
+
+![IDF](https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/20250113224742.png)
+
+
+### BM25
+
+在TF-IDF这一节中，我们介绍了TF-IDF的缺点，即会偏向于长文档，以及对于Query中的term没有进行权重的处理。
+我们已经解决了Query中的term的权重问题，那么如何解决文档长度的问题呢？
+
+#### 文档长度的问题
+在实际的检索过程中，当两篇文档的term出现的次数相同时，我们应该更加青睐于较短的文档。 因此我们需要一个公式来对文档的长度进行惩罚。 
+在想出这个公式之前，我们先量化一下文档的长度。我们可以用文档中term的个数来量化文档的长度，即
+
+$$
+\text{doc\_length}(D) = \sum_{t \in D} \text{occurance}(t,D)
+$$
+
+但是这个仅仅只是文档的长度。我们需要把文档的长度与整个文档集合的平均长度进行比较，从而可以评估在这个文档集合中，这个文档的长度是长还是短。即
+
+$$
+\text{doc\_length\_ratio}(D) = \frac{\text{doc\_length}(D)}{\text{avg\_doc\_length}}
+$$
+在得到能够量化文档长度的公式之后，我们先暂缓一下，思考一下TF-IDF的其他问题。
+
+#### Refine TF
+在TF-IDF中，我们假设TF和相关性是成正比的，即TF越大，相关性越高。但是这显然是不合理的。
+例如，猫在文档中出现了1000次，那么这篇文档的相关性并不意味比猫在文档中出现了100次的文档高10倍。
+在实际搜索中，我们会倾向于认为，当一个term在文档中出现的次数较多时，它相关性的边际效益会递减。
+
+同时如果仅使用TF来衡量文档的相关性，那么对于Query: "猫和老鼠"，出现了"猫"和"老鼠"各一次的文档与出现了"猫"2次的文档的相关性是一样的，
+这显然也是不合理的。
+
+因此，我们需要对TF进行调整，使得TF较小时，相关性的增长较快，而TF较大时，相关性的增长较慢。并且对于Query中的term，命中的term越多，相关性越高。
+新的TF公式如下
+$$
+\text{new\_tf}(t,D) = \frac{\text{occurance}(t,D) }{\text{occurance}(t,D) + K}
+$$
+
+从图中我们可以看到，当我们加上K之后，TF的增长速度会随着TF的增加而减缓。
+![TF](https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/20250113232106.png)
+
+同时如果Query为"猫和老鼠"，那么出现了"猫"和"老鼠"各一次的文档, 它的相关性为 $$\frac{1}{2} + \frac{1}{2} = 1$$ (假设K=1)，
+而出现了"猫"2次的文档，它的相关性为 $$\frac{2}{3} < 1$$，
+
+到了这里还记得，我们上一节暂缓的文档长度问题吗？我们可以将文档长度的问题与TF的问题结合起来，即将我们在上一节得到的量化文档长度的公式与新的TF公式结合起来，即
+
+$$
+\text{new\_tf}(t,D) = \frac{\text{occurance}(t,D) }{\text{occurance}(t,D) + K \cdot \frac{\text{doc\_length}(D)}{\text{avg\_doc\_length}} }
+$$
+
+为什么这个公式是合理的呢？如果文档的长度等于平均长度，那么这个公式就等价于我们上一节得到的新的TF公式。
+而当文档的长度远大于平均长度时，这个公式会增大K值，从而减小相关性，即对文档的长度进行了惩罚。而当文档的长度远小于平均长度时，这个公式会减小K值，从而增大相关性，即对文档的长度进行了奖励。
+
+#### 自定义文档长度的惩罚
+在实际检索的场景中，我们并不总是希望文档的长度越短越好，有时候我们希望文档的长度越长越好。例如在搜索引擎中，我们希望返回的文档尽可能的丰富，这时我们可以自定义一个参数b，来调整文档长度的惩罚。即
+$$
+(1 - b + b \cdot \frac{\text{doc\_length}(D)}{\text{avg\_doc\_length}}) (0 \leq b \leq 1)
+$$
+
+当B=1时，公式如下所示，与之前的公式等价
+$$
+(\frac{\text{doc\_length}(D)}{\text{avg\_doc\_length}})
+$$
+
+当B=0时，文档的长度不再对相关性产生影响。
+$$
+(1 - 0 + 0 \cdot \frac{\text{doc\_length}(D)}{\text{avg\_doc\_length}}) = 1
+$$
+
+因此用户可以通过调整B的值来调整文档长度对相关性的影响。至此把我们的公式整合一下，即
+$$
+\text{score}(t,D) = \frac{tf(t,D)}{tf(t,D) + k_1 \cdot (1 - b + b \cdot \frac{\text{doc\_length}(D)}{\text{avg\_doc\_length}})} \cdot \text{idf}(t,D)
+$$
+
+#### Refine IDF
+BM25中定义的IDF与我们之前定义的IDF有所不同，具体的公式如下
+$$
+\text{idf}(t,D) = \log{\frac{N - n(t) + 0.5}{n(t) + 0.5}}
+$$
+
+这是数学家出于理论上的考虑，对IDF进行了一些调整，使得IDF的变化更加平滑，同时避免了一些极端情况的发生。但是在实际情况中，Lucene对IDF进行了一些调整，具体的公式如下
+$$
+\text{idf}(t,D) = \log{\frac{ 1 + (N - DF + 0.5)}{DF + 0.5}}
+                \approx \log{1 + \frac{N - DF}{DF}}
+                = \log{\frac{N}{DF}}
+$$
+即我们之前定义的IDF公式。
+
+#### Assemble
+将我们之前定义的TF，IDF，文档长度的惩罚，文档长度的奖励整合起来，即
+$$
+\text{BM25}(t,D) = \frac{tf(t,D)}{tf(t,D) + k_1 \cdot (1 - b + b \cdot \frac{\text{doc\_length}(D)}{\text{avg\_doc\_length}})} \cdot \text{idf}(t,D)
+$$
+一个简单的BM25的公式，通过巧妙的数学，成为了文档相关性打分的事实标准。即使在深度学习的时代，BM25仍然是搜索引擎中最常用的打分公式之一。
+
+
+## 快速求解TopK
+在实际的搜索引擎中, 我们最常处理的Query就是TopK的问题，即给定一个Query，我们需要返回与Query最相关的K个文档。
+
+
+### DAAT(Document At A Time)
+
+### TAAT(Term At A Time)
+
+### WAND(Weak AND)
+
+### MaxScore
