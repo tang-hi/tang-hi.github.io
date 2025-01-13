@@ -137,12 +137,12 @@ $$
 (1 - b + b \cdot \frac{\text{doc\_length}(D)}{\text{avg\_doc\_length}}) (0 \leq b \leq 1)
 $$
 
-当B=1时，公式如下所示，与之前的公式等价
+当`b=1`时，公式如下所示，与之前的公式等价
 $$
 (\frac{\text{doc\_length}(D)}{\text{avg\_doc\_length}})
 $$
 
-当B=0时，文档的长度不再对相关性产生影响。
+当`b=0`时，文档的长度不再对相关性产生影响。
 $$
 (1 - 0 + 0 \cdot \frac{\text{doc\_length}(D)}{\text{avg\_doc\_length}}) = 1
 $$
@@ -177,11 +177,170 @@ $$
 ## 快速求解TopK
 在实际的搜索引擎中, 我们最常处理的Query就是TopK的问题，即给定一个Query，我们需要返回与Query最相关的K个文档。
 
+那么在几十上百亿的文档中，如何快速的找到与Query最相关的K个文档呢？我们当然可以对所有被召回的文档进行打分，然后排序，取TopK。
+但是这样的延迟显然是不可接受的。因此我们需要一些技巧来加速这个过程。
+这一章会介绍当前最常用的几种技术(无损检索，即检索的TopK文档是准确的)。
+
+> 我们主要关注OR Query， 即Query中的term之间是或的关系。 AND Query 因为求交的特性，往往计算要求不高
 
 ### DAAT(Document At A Time)
+DAAT是一种朴素的方法，我们会使用一个堆用来维护当前的TopK文档。
+它的特点是，对于每一个文档，我们都会计算它的得分，然后与堆顶的文档进行比较，如果得分更高，那么我们就将堆顶的文档替换为当前文档。
+具体步骤如下
+1. 对于Query中的每一个term，我们检索出该term对应的倒排列表
+2. 我们将这些倒排列表合并，得到一个包含所有文档ID的列表
+3. 对于每一个文档ID，我们计算它的得分，然后与堆顶的文档进行比较，如果得分更高，那么我们就将堆顶的文档替换为当前文档。
+
+我们通过如下的伪代码来描述这个过程
+
+```python
+def DAAT(query, document_collection):
+  """
+  Performs Document-At-A-Time (DAAT) retrieval.
+
+  Args:
+    query: A list of query terms (strings).
+    document_collection: collection of documents to be searched.
+
+  Returns:
+    A list of (documentID, score) tuples, ranked in descending order of score.
+  """
+
+  inverted_index = document_collection.get_inverted_index()
+  postings_lists = [inverted_index[term] for term in query]
+
+  merged_postings = merge_postings_lists(postings_lists)
+  for doc_id in merged_postings:
+    score = compute_score(query, doc_id, document_collection)
+    # Update the heap with the new score.
+    if len(heap) < k:
+      heapq.heappush(heap, (score, doc_id))
+    elif score > heap[0][0]:
+      heapq.heappushpop(heap, (score, doc_id))
+```
 
 ### TAAT(Term At A Time)
+TAAT 与 DAAT一样，也是一种朴素的方法，它的特点是，我们并不会像DAAT一样，使用堆来维护TopK文档，我们会遍历每一个倒排链，计算出文档的部分得分(partial score)。
+我们在内存中维护每一个文档的部分得分，当我们遍历完所有的倒排链之后，我们再对文档的得分进行排序，取TopK。它的具体步骤如下
+1. 对于Query中的每一个term，我们检索出该term对应的倒排列表
+2. 对于每一个倒排列表，我们遍历其中的每一个文档，计算它的部分得分
+3. 对于每一个文档，我们将它的部分得分加到它的总得分上
+4. 对于所有的文档，我们对它们的得分进行排序，取TopK
+
+我们通过如下的伪代码来描述这个过程
+
+```python
+def TAAT(query, document_collection):
+  """
+  Performs Term-At-A-Time (TAAT) retrieval.
+
+  Args:
+    query: A list of query terms (strings).
+    document_collection: collection of documents to be searched.
+
+  Returns:
+    A list of (documentID, score) tuples, ranked in descending order of score.
+  """
+
+  inverted_index = document_collection.get_inverted_index()
+  postings_lists = [inverted_index[term] for term in query]
+
+  scores = {}
+  for postings_list in postings_lists:
+    for doc_id in postings_list:
+      score = compute_score(query, doc_id, document_collection)
+      scores[doc_id] += score
+
+  top_k = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:k]
+  return top_k
+```
+
+### Compare DAAT and TAAT
+在介绍完最简单的两个朴素方法之后，我们来比较一下这两种方法的优缺点。
+在实际检索的场景下，我们往往会使用DAAT，不仅因为它的延迟更低，而且它的内存占用更低。TAAT的优势在于， 他对倒排链的顺序读取，有利于CPU的cache命中以及磁盘的预读取。
+但是随着文档集合的增大，TAAT的内存占用会迅速增加，而他顺序读取的优势也会因为更新文档的得分而减弱。
+而DAAT的内存占用是固定的，且在大规模文档集合中，它的延迟会比TAAT更低。因此在实际的搜索引擎中，我们往往会使用DAAT。
 
 ### WAND(Weak AND)
+WAND是一种基于DAAT的优化方法，它的特点是，我们会使用一个阈值来剪枝，当文档的得分低于阈值时，我们就不再计算它的得分。
+他的具体步骤如下:
 
+索引构建阶段：
+1. 在索引构建阶段，我们会记录每一个term所能得到的最高得分(upper bound)，即
+    $$\text{upperbound}(t) = max(\text{score}(t, \forall d \in D))$$
+
+索引检索阶段:
+1. 对于Query中的每一个term，我们检索出该term对应的倒排列表,设置阈值为0
+2. 我们将倒排链表按照`Doc ID`进行排序
+3. 我们按顺序遍历每一个倒排链表，将term对应的upperbound进行累加，直到得分超过当前维护的阈值。
+3.1 如果遍历完了所有的倒排链表，得分仍然没有超过阈值，那么检索结束，返回结果
+3.2 如果得分超过了阈值，那么我们获取这条倒排链的Doc ID
+3.2.1 如果这个Doc ID le 当前记录的Doc ID，那么我们任意选择一个之前的倒排链，调用`next(docid)`方法, jump to 1
+3.2.2 检查第一条倒排链的Doc ID是否等于当前记录的Doc ID，如果是，那么我们就找到了一个文档，我们计算它的得分，然后与堆顶的文档进行比较，如果得分更高，那么我们就将堆顶的文档替换为当前文档。
+3.2.3 如果第一条倒排链的Doc ID不等于当前记录的Doc ID，那么我们任意选择一个之前的倒排链，调用`next(docid)`方法, jump to 1
+
+我们通过如下的伪代码来描述这个过程
+
+```python
+def find_pivot_term(term, threshold, postings_lists):
+  """
+  Find the pivot term for WAND retrieval.
+
+  Args:
+    term: A query term (string).
+    threshold: The threshold score.
+
+  Returns:
+    A tuple (posting_idx, term) of the pivot term.
+  """
+  score = 0
+  for i, postings_list in enumerate(postings_lists):
+    term = postings_list.term
+    score += term.upperbound
+    if score > threshold:
+      return i, term
+
+def WAND(query, document_collection):
+  """
+  Performs Weak AND (WAND) retrieval.
+
+  Args:
+    query: A list of query terms (strings).
+    document_collection: collection of documents to be searched.
+
+  Returns:
+    A list of (documentID, score) tuples, ranked in descending order of score.
+  """
+
+  inverted_index = document_collection.get_inverted_index()
+  postings_lists = [inverted_index[term] for term in query]
+  top_k = []
+  threshold = 0
+  current_doc_id = None
+  while True:
+    sort(postings_lists, key=lambda x: x.current_doc_id())
+    pivot_idx, pivot_term = find_pivot_term(postings_lists, threshold)
+    pivot_doc_id = postings_lists[pivot_idx].current_doc_id()
+    if pivot_term is None:
+      break
+    if pivot_doc_id <= current_doc_id:
+      random_postings_list = random.choice(postings_lists[:pivot_idx])
+      random_postings_list.next(current_doc_id + 1)
+      continue
+    else:
+      if postings_list[0].current_doc_id() == pivot_doc_id:
+        current_doc_id = pivot_doc_id
+        score = compute_score(query, current_doc_id, document_collection)
+        if len(top_k) < k:
+          heapq.heappush(top_k, (score, current_doc_id))
+        elif score > top_k[0][0]:
+          heapq.heappushpop(top_k, (score, current_doc_id))
+          threshold = top_k[0][0]
+      else:
+        random_postings_list = random.choice(postings_lists[:pivot_idx])
+        random_postings_list.next(pivot_doc_id)
+```
+
+下面我们在用一个例子来详细说明WAND的过程
 ### MaxScore
+MaxScore是一种基于DAAT的优化方法，它的特点是，我们会使用一个阈值来剪枝，当文档的得分低于阈值时，我们就不再计算它的得分。
