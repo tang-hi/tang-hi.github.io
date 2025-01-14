@@ -273,11 +273,11 @@ WAND是一种基于DAAT的优化方法，它的特点是，我们会使用一个
 1. 对于Query中的每一个term，我们检索出该term对应的倒排列表,设置阈值为0
 2. 我们将倒排链表按照`Doc ID`进行排序
 3. 我们按顺序遍历每一个倒排链表，将term对应的upperbound进行累加，直到得分超过当前维护的阈值。
-3.1 如果遍历完了所有的倒排链表，得分仍然没有超过阈值，那么检索结束，返回结果
-3.2 如果得分超过了阈值，那么我们获取这条倒排链的Doc ID
-3.2.1 如果这个Doc ID le 当前记录的Doc ID，那么我们任意选择一个之前的倒排链，调用`next(docid)`方法, jump to 1
-3.2.2 检查第一条倒排链的Doc ID是否等于当前记录的Doc ID，如果是，那么我们就找到了一个文档，我们计算它的得分，然后与堆顶的文档进行比较，如果得分更高，那么我们就将堆顶的文档替换为当前文档。
-3.2.3 如果第一条倒排链的Doc ID不等于当前记录的Doc ID，那么我们任意选择一个之前的倒排链，调用`next(docid)`方法, jump to 1
+    1. 如果遍历完了所有的倒排链表，得分仍然没有超过阈值，那么检索结束，返回结果
+    2. 如果得分超过了阈值，那么我们获取这条倒排链的Doc ID
+        1. 如果这个`Doc ID` ≤ 当前记录的`Doc ID`，那么我们任意选择一个之前的倒排链，调用`next(docid)`方法, 跳转到步骤1
+        2. 检查第一条倒排链的`Doc ID`是否等于当前记录的`Doc ID`，如果是，那么我们就找到了一个文档，我们计算它的得分，然后与堆顶的文档进行比较，如果得分更高，那么我们就将堆顶的文档替换为当前文档。
+        3. 如果第一条倒排链的`Doc ID`不等于当前记录的`Doc ID`，那么我们任意选择一个之前的倒排链，调用`next(docid)`方法, 跳转到步骤1
 
 我们通过如下的伪代码来描述这个过程
 
@@ -341,6 +341,155 @@ def WAND(query, document_collection):
         random_postings_list.next(pivot_doc_id)
 ```
 
-下面我们在用一个例子来详细说明WAND的过程
+下面我们再用一个例子来详细说明WAND的过程
+假设我们的Query是"猫 狗 老鼠"，求解Top2， 
+
+在最初的情况下，因为堆为空，所以我们的阈值为0。
+
+假定
+
+`猫`在整个文档集合中最大的得分为0.1
+
+`狗`在整个文档集合中最大的得分为0.4
+
+`老鼠`在整个文档集合中最大的得分为0.9。
+
+下面我们开始检索，对倒排链表按照`Doc ID`进行排序。然后从第一条倒排链开始，我们把对应的`term`的upperbound 加到当前的得分上，得分为0.9。因为0.9 大于阈值0，
+因此我们计算这个Doc真正的得分(0.6)，将其放入堆中。并将对应的倒排链移动到下一个文档。
+
+![WAND1](https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/20250114221922.png)
+
+然后我们继续先对倒排链表进行排序，继续从第一条倒排链开始，我们把`老鼠`的upperbound 加到当前的得分上，得分为0.9。因为0.9 大于阈值0，
+因此我们计算这个Doc真正的得分(0.7)，将其放入堆中。 并将对应的倒排链移动到下一个文档。
+
+![WAND2](https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/20250114221819.png)
+
+我们仍然对倒排链表进行排序后从第一条倒排链开始，注意因为我们堆中已经有两个文档了，所以我们的阈值为0.6。我们
+从`猫`的倒排链开始，我们把`猫`的upperbound 加到当前的得分上，得分为0.1。因为0.1 小于阈值0.6，所以我们需要继续累加`狗`的upperbound(0.4)。
+直到当我们累加到`老鼠`的upperbound时，我们的得分超过阈值。此时我们需要对比当前倒排链的Doc ID与第一条倒排链(猫)的Doc ID，发现当前倒排链的Doc ID大于第一条倒排链的Doc ID，
+因此我们可以将当前倒排链之前的所有倒排链的Doc ID都移动到大于等于当前倒排链的Doc ID。
+
+![WAND3](https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/20250114221700.png)
+
+> 尽管WAND论文中提到的是在当前倒排链之前的所有倒排链中任选一个，将其Doc ID移动到大于等于当前倒排链的Doc ID，
+> 这主要是出于担心所有倒排链一起移动会触发多次磁盘读取，但是实际上，我们可以将所有倒排链一起移动，这并不会影响正确性。
+
+我们继续重复之前的步骤，这一次我们会发现当前倒排链的Doc ID与第一条倒排链(猫)的Doc ID相等，因此我们找到了一个文档，我们计算它的得分(0.5)，然后与堆顶的文档进行比较，如果得分更高，那么我们就将堆顶的文档替换为当前文档。
+同时将对应的倒排链移动到下一个文档。下一轮我们会发现所有的倒排链upperbound的和都小于阈值，因此我们可以结束检索，返回结果。
+
+从这个例子中我们可以看到，WAND的优势在于，它可以在检索的过程中，根据当前的得分，动态的调整阈值，从而减少不必要的计算以及磁盘读取。(跳过了文档3，4，6，9，12，15，17)
+
+
+
+
+
 ### MaxScore
-MaxScore是一种基于DAAT的优化方法，它的特点是，我们会使用一个阈值来剪枝，当文档的得分低于阈值时，我们就不再计算它的得分。
+MaxScore是一种基于DAAT的优化方法，它的特点是，我们会将倒排链分成两部分，一部分用来做OR检索，另一部分仅仅用来计算得分。
+从而减少计算次数。它的具体步骤如下:
+1. 对于Query中的每一个term，我们检索出该term对应的倒排列表
+2. 我们将这些倒排列表按照upperbound倒序排序
+3. 我们根据当前TopK的得分，我们将倒排链分成两部分
+4. 我们对essential倒排链进行OR检索，得到一个文档ID, 再检查non-essential倒排链中是否包含这个文档ID，如果包含，那么我们将对应的term的得分加到当前文档的得分上
+    1. 将我们得到的文档的得分与堆顶的文档进行比较，如果得分更高，那么我们就将堆顶的文档替换为当前文档， 并更新阈值，重复步骤3
+    2. 如果得分没有超过阈值，重复步骤4
+
+步骤3中的划分依据为，我们自下而上的累加upperbound，直到得分超过阈值，假设此时的倒排链为`i`，那么我们将前`i`个倒排链作为essential倒排链，剩下的作为non-essential倒排链。
+这样划分的好处是，一个Doc哪怕它包含了`non-essential`倒排链中的所有term，也不会成为TopK文档，因此我们只需要考虑`essential`倒排链中的term。
+从而减少了计算次数。
+
+伪代码如下
+
+```python
+def split_postings_lists(postings_lists, threshold):
+  """
+  Split the postings lists into essential and non-essential parts.
+
+  Args:
+    postings_lists: A list of postings lists.
+    threshold: The threshold score.
+
+  Returns:
+    A tuple (essential_postings_lists, non_essential_postings_lists) of the split postings lists.
+  """
+  essential_postings_lists = []
+  non_essential_postings_lists = []
+  score = 0
+  # reverse for descending order
+  i = len(postings_lists) - 1
+  while i >= 0:
+    score += postings_lists[i].upperbound
+    if score > threshold:
+      break
+    non_essential_postings_lists.append(postings_lists[i])
+  essential_postings_lists = postings_lists[:i] if i > 0 else []
+  return essential_postings_lists, non_essential_postings_lists
+def MaxScore(query, document_collection):
+  """
+  Performs MaxScore retrieval.
+
+  Args:
+    query: A list of query terms (strings).
+    document_collection: collection of documents to be searched.
+
+  Returns:
+    A list of (documentID, score) tuples, ranked in descending order of score.
+  """
+
+  inverted_index = document_collection.get_inverted_index()
+  postings_lists = [inverted_index[term] for term in query]
+  top_k = []
+  threshold = 0
+  current_doc_id = None
+  sort(postings_lists, key=lambda x: x.upperbound, reverse=True)
+  while True:
+    es_posting_list, unes_posting_list = split_postings_lists(postings_lists, threshold)
+    doc_id = OR(essential_postings_lists)
+    if doc_id in non_essential_postings_lists:
+      score = compute_score(query, doc_id, document_collection)
+      if len(top_k) < k:
+        heapq.heappush(top_k, (score, doc_id))
+      elif score > top_k[0][0]:
+        heapq.heappushpop(top_k, (score, doc_id))
+        threshold = top_k[0][0]
+``` 
+
+下面我们再从一个例子来详细说明MaxScore的过程
+假设我们的Query是"猫 狗 老鼠"，求解Top2，
+假定
+
+`猫`在整个文档集合中最大的得分为0.1
+
+`狗`在整个文档集合中最大的得分为0.4
+
+`老鼠`在整个文档集合中最大的得分为0.9。
+
+在最开始的情况下，我们的阈值为0，因此所有的倒排链都是`essential`倒排链。
+我们只需要对Doc ID最小的文档进行算分，将其放入堆中。将对应的倒排链移动到下一个文档。
+![MaxScore](https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/20250114225318.png)
+
+因为堆中的文档数小于2，我们的阈值依旧为0，因此我们继续对Doc ID最小的文档进行算分，将其放入堆中。然后我们将对应的倒排链移动到下一个文档。
+此时堆的文档数等于2，我们更新阈值为0.3。
+![MaxScore2](https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/20250114225711.png)
+
+此时我们划分倒排链，我们发现`猫`的upperbound(0.1) + `狗`的upperbound(0.4) = 0.5 > 0.3，因此我们将`猫`的倒排链划分为`non-essential`倒排链，`狗`和`老鼠`的倒排链作为`essential`倒排链。
+我们对`essential`倒排链进行OR检索，得到文档9，因为non-essential倒排链中不包含文档9，因此我们计算文档9的得分(0.8), 更新TopK文档，更新阈值为0.7。
+
+![MaxScore3](https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/20250114230508.png)
+
+我们继续划分倒排链，我们发现需要将所有的倒排链全部加起来才能超过阈值，因此我们将`猫`和`狗`的倒排链划分为`non-essential`倒排链。
+`老鼠`的倒排链作为`essential`倒排链。因为`essential`倒排链只有一条，我们直接遍历这条倒排链，得到文档18，
+因为non-essential倒排链中包含文档18，因此我们计算文档18的得分(0.4), 无需更新TopK文档。
+
+![MaxScore4](https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/20250114230924.png)
+
+因为`essential`倒排链全部计算完毕，所以我们结束检索，返回结果。
+
+### Compare WAND and MaxScore
+WAND和MaxScore都是基于DAAT的优化方法，它们的优势在于，可以根据当前的得分，动态的调整阈值，从而减少不必要的计算以及磁盘读取。
+他们之间的优劣难以比较，在实际应用中，也无法说某一个方法一定比另一个方法好。
+WAND相较于MaxScore的优势在于，它可以更激进的剪枝，从而减少计算次数。而它的劣势在于每一次检索时，都需要对倒排链进行排序
+在Query较长时，排序的开销会变得很大。因此在Query较长时，MaxScore往往会比WAND更快。而在文档数量较大时，WAND往往会比MaxScore更快。
+
+### What's Next
+我们在这里仅仅简单介绍了检索中算分的一些简单方法，而更加进阶的BlockMaxScore，BlockMaxWAND等方法，留待以后的文章中介绍。
+
