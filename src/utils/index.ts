@@ -27,7 +27,10 @@ export async function getPosts() {
     const bDate = b.data.pubDate || new Date()
     return -1 * (aDate.getTime() - bDate.getTime())
   })
-  return posts
+  for (let post of posts)
+    console.log(post.data)
+  const visiblePosts = posts.filter(post =>  !('annual-review' in  post.data.categories));
+  return visiblePosts 
 }
 
 const parser = new MarkdownIt()
