@@ -7,7 +7,7 @@ import Pagination from '~/components/Pagination.astro'
 const posts = (await getPosts()).slice(0, 5)
 
 const { translate: t } = Astro.locals
-Astro.response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate', 'max-age=0');
+Astro.response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 Astro.response.headers.set('Pragma', 'no-cache');
 Astro.response.headers.set('Expires', '0');
 
