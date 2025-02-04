@@ -1,5 +1,4 @@
 .DS_Store
-public/*
 # build output
 dist/
 # generated types
