@@ -15,7 +15,7 @@ export default defineConfig({
   prefetch: true,
   server: {
     headers: {
-      "Cache-Control": "no-cache, no-store, must-revalidate, proxy-revalidate",
+      "Cache-Control": "no-cache, no-store, must-revalidate, proxy-revalidate, max-age=0",
       "Pragma": "no-cache",
       "Expires": "0"
     }

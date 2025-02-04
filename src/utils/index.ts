@@ -27,9 +27,7 @@ export async function getPosts() {
     const bDate = b.data.pubDate || new Date()
     return -1 * (aDate.getTime() - bDate.getTime())
   })
-  for (let post of posts)
-    console.log(post.data)
-  const visiblePosts = posts.filter(post =>  !('annual-review' in  post.data.categories));
+  const visiblePosts = posts.filter(post =>  !(post.data.categories && post.data.categories.includes('annual-review')));
   return visiblePosts 
 }
 
