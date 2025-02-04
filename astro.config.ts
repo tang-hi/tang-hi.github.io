@@ -13,6 +13,13 @@ import partytown from "@astrojs/partytown";
 export default defineConfig({
   site: THEME_CONFIG.website,
   prefetch: true,
+  server: {
+    headers: {
+      "Cache-Control": "no-cache, no-store, must-revalidate, proxy-revalidate",
+      "Pragma": "no-cache",
+      "Expires": "0"
+    }
+  },
   markdown: {
     shikiConfig: {
       theme: 'github-light',
