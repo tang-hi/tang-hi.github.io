@@ -39,7 +39,7 @@ r
 
 ![delete](https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/250222_22h30m45s_screenshot.png)
 
-我们发现delete的是一个 `std::string` 对象，这个对象的内存地址是`0x55555556b2d0`，检查代码可以发现这个对象是一个静态成员变量。
+我们发现delete的是一个 `std::string` 对象，检查代码可以发现这个对象是一个静态成员变量。
 
 ```cpp
 // Foo.hpp
