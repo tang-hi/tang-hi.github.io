@@ -1,0 +1,227 @@
+---
+title: 从 double free 再熟悉链接器
+pubDate: 2025-02-22
+categories:
+  - Interesting
+  - Linker
+  - Bug
+description: '在工作中遇到了一个因为链接导致的double free bug，这篇文章将会从这个bug出发，再次熟悉链接器的工作原理。'
+---
+
+在上上周的工作中，我发现部门的一个C++程序在退出时会出现`double free`的问题，而之所以之前一直没有发现这个问题
+是因为GCC版本太低，在高版本的GCC中，编译器对这种`double free`的问题进行了检查，因此暴露了这个问题。
+尽管这个问题可以继续隐藏，但是我因为比较喜欢解密，所以我还是决定去排查了一下这个问题（因为不能把公司的代码写在这里，所以我自己写了一个简单的例子， 下面分析的也都是我这个例子）
+
+
+
+## 快速排查与解决
+
+对于这种问题，第一反应就是使用`valgrind`来检查内存的问题. 但使用`valgrind`检查时会报错，可能还是GCC版本的问题，所以依旧使用`gdb`来查看这个问题。
+
+```shell
+gdb ./your_program
+r
+```
+
+gdb 的结果如下
+
+![valgrind](https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/double-free.png)
+
+看到上面的报错信息和堆栈时，我当时有点慌张，没有任何业务代码，只有一堆系统和C++标准库的符号，但是就像
+博客名称`Don't Panic`一样，计算机没有魔法，一切东西都可以找到解释。从这个堆栈中，我们至少可以看到
+`delete` 的地址`0x55555556b2d0`，那我们可以通过`gdb`来查看这个地址的内存情况
+
+```shell
+gdb ./your_program
+watch *0x55555556b2d0
+r
+```
+
+我们发现delete的是一个 `std::string` 对象，这个对象的内存地址是`0x55555556b2d0`，检查代码可以发现这个对象是一个静态成员变量。
+
+```cpp
+// Foo.hpp
+#pragma once
+#include <string>
+
+class Foo {
+public:
+  static std::string getFoo();
+  static std::string foo;
+};
+
+// Foo.cpp
+#include "foo.hpp"
+#include <string>
+
+std::string Foo::foo = "dwjdiawjdiawjdiawjdawidjawijdwai";
+
+std::string Foo::getFoo() {
+  return foo;
+}
+```
+
+为了查看这个地址在哪里被`delete`，我们可以使用`gdb`的`break`命令来查看这个地址在哪里被`delete`($rdi是第一个参数所在的寄存器)
+
+```shell
+break operator delete if $rdi = 0x55555556b2d0
+r
+```
+
+我们可以看到在程序依赖的两个so析构时，这个地址被`delete`了两次，这就是`double free`的原因。当时我猜测应该就是链接导致两个so都认为自己拥有这个符号。
+因为我们这个程序的链接关系相当错综复杂，极易出错。因此我猜测式的修改了一下链接的方式，暂时解决了这个问题。
+
+## 复现问题以及解释BUG
+
+这个问题解决后，我没有细究它。直到这周周会，为了不浪费我的个人时间，我决定来细究这个问题。了解一个问题的最好方式就是复现这个问题。
+下面是我们程序的依赖关系。简单来说就是，**我们编译了两个so，其中一个so依赖另一个的静态库，然后我们的main程序依赖这两个so**。
+
+- foo.h foo.cpp -> libfoo.so & libfoo.a
+
+- bar.cpp libfoo.a -> libbar.so
+
+- main.cpp libfoo.so libbar.so -> main
+
+代码如下
+
+```cpp
+// foo.hpp
+#pragma once
+#include <string>
+
+class Foo {
+public:
+   static std::string getFoo();
+   static std::string foo;
+};
+
+// foo.cpp
+#include "foo.hpp"
+#include <string>
+
+std::string Foo::foo = "dwjdiawjdiawjdiawjdawidjawijdwai";
+
+std::string Foo::getFoo() {
+  return foo;
+}
+
+// bar.cpp
+#include <iostream>
+#include <ostream>
+
+#include "foo.hpp"
+
+void global_function() {
+    std::cout << "global_function" << std::endl;
+    std::cout << Foo::getFoo() << std::endl;
+}
+
+// main.cpp
+#include <iostream>
+#include "foo.hpp"
+#include <ostream>
+
+int main(int argc, char *argv[]) {
+  std::cout << "Hello, double free!" << std::endl;
+  std::cout << Foo::foo << std::endl;
+  return 0;
+}
+```
+
+编译脚本如下
+
+```shell
+g++ -fPIC -c -g foo.cpp -o foo.o
+g++ -shared -g foo.o -o libfoo.so
+
+ar rcs foo.a foo.o
+
+g++ -fPIC -c -g bar.cpp -o bar.o
+
+g++ -shared -g bar.o foo.a -o libbar.so
+
+g++ main.cpp -g -o main -L. -lfoo -lbar -Wl,-rpath=.
+```
+
+那`double free`的问题是如何产生的呢？我们来分析一下这个编译脚本
+
+首先我们编译了`foo.cpp`生成了`libfoo.so` 和 `foo.a`. 我们通过`nm`命令查看`so`的符号表
+
+```shell
+nm -DC libfoo.so
+
+// output
+0000000000005100 B Foo::foo[abi:cxx11]
+000000000000227a T Foo::getFoo[abi:cxx11]()
+```
+
+我们可以看到`libfoo.so`中有一个`Foo::foo`的符号，这个符号是一个全局变量，且是强符号。
+
+然后我们编译了`bar.cpp`生成了`libbar.so`，这个so依赖了`libfoo.a`。因为`bar.cpp`中调用了`Foo::getFoo`，所以`libbar.so`中会有一个对`Foo::getFoo`的引用。
+根据链接器的规则，链接时会把`foo.a` 中的`Foo::getFoo`符号放到`libbar.so`中，这样`libbar.so`中就有了`Foo::foo`和`Foo::getFoo`两个符号。而且应该是两个强符号。
+我们可以通过`nm`命令查看`libbar.so`的符号表
+
+```shell
+nm -DC libbar.so
+
+// output
+0000000000005120 B Foo::foo[abi:cxx11]
+0000000000002398 T Foo::getFoo[abi:cxx11]()
+```
+
+> CSAPP 对链接静态库的规则有详细的介绍，这里简单介绍一下。链接器会按照从左到右的顺序查找符号，
+> 如果找到了就会使用这个符号，如果没有找到就会继续查找下一个静态库。如果找到了一个强符号，那么就会使用这个符号，如果找到了一个弱符号，那么就会使用这个符号。如果找到了两个强符号，那么就会报错。
+> 最后阶段，链接器会检查是否有未定义的符号，如果有未定义的符号，那么就会报错。
+
+然后我们编译了`main.cpp`生成了`main`，这个程序依赖了`libfoo.so`和`libbar.so`。
+
+所以到这一步就很清晰了，当`main` 被执行时，`libfoo.so`和`libbar.so`都会被加载到内存中，`libfoo.so`中的`Foo::foo`会被初始化，而准备初始化`libbar.so`中的`Foo:foo`时会发现`Foo::foo`在符号表中已经存在了，所以会直接将
+`libbar.so`中的`Foo::foo`重定向到`libfoo.so`中的`Foo::foo`。这样就会导致两个`so`中这个符号的内存地址是一样的，所以在程序结束时，两个`so`都分别会对这个符号进行析构，导致`double free`的问题。
+
+**但是等一下！**
+
+### 链接时有两个强符号会报错，为什么这里没有报错呢？
+
+这是因为当链接动态库时，静态链接器的职责为确保所有符号（函数、变量等）在目标文件和动态库中有明确定义，同时记录动态库的依赖关系。
+而在执行的过程时，动态链接器的符号介入(Interposition)机制为先加载的符号优先。
+
+会检查符号冲突的情况仅在链接**静态库以及可重定向目标文件**时。
+
+### 但是我平时明明会出现multiple definition的问题？
+
+这是因为代码在编译时，也会检查你是否有多次定义的符号，如果有多次定义的符号，那么就会报错。此时还没有链接。
+
+
+## 完整的故事
+
+1. 符号重复定义：
+  - libfoo.so和libbar.so均包含Foo::foo的定义。
+  - 在链接libbar.so时，静态库foo.a被合并到libbar.so中，导致libbar.so内部包含独立的Foo::foo实例。
+  - 主程序同时链接了libfoo.so和libbar.so，二者均导出Foo::foo符号。
+
+2. 动态链接器的符号解析：
+  - 动态链接器默认采用“全局符号介入”策略。若多个库定义同名全局符号，先加载的库中的符号会被优先使用，后续库中对同名符号的引用会绑定到第一个符号的地址。
+  - 因此，libfoo.so和libbar.so中的Foo::foo最终指向同一个内存地址。
+3. 双重析构：
+  - 程序退出时，共享库的析构函数会按加载顺序的反序执行。
+  - Foo::foo作为全局对象，其析构函数会被两个库各自调用一次，导致std::string的内存被释放两次（double free）。
+
+考虑到依赖关系错综复杂，直接隐藏符号可能导致更加混乱的依赖关系，所以在编译`so`时，我们可以使用`-Bsymbolic`要求每个动态库使用自己的符号，这样就可以避免这个问题。
+
+## 总结
+在排查这个问题时，重新熟悉了链接器的工作原理倒是其次，更重要的是，我对项目管理有了更深的理解
+
+1. 永远要选择一门工业级的语言
+
+C++已经不是一门工业级的语言了，它没有包管理器，意味着你没法方便的复用别人的成果。我很难说出第二门语言需要像C++那样，代码复用度底，程序员大部分时间不是专注
+业务代码本身，而是解决一些乱七八糟的编译，链接问题。更关键的是，你想要从市场招聘一个厉害的C++程序员，基本等同于抽奖，不是说你开的工资高，就能招到。更关键的是
+C++程序员往往技术ego较大，而讽刺的是令他ego大的正是他从来没有弄清楚的东西。至少对我来说，如果我得知我的竞争对手使用C++开发，我有很大的自信在迭代上会比他快。
+
+2. 项目管理永远要选择最简单的方式
+
+这个问题你很容易blame到个人身上(这应该也是互联网的大部分做法)，例如你依赖做的太烂了，你代码写的太烂了。这是最不动脑子也是最符合人性的做法。但这是最于事无补的做法。
+项目管理应该尽可能做到从市场上招来任何水平的人，都有一套最简单的方式让他们不出错。比如这个问题，完全可以通过统一代码仓库，统一编译脚本，统一编译器版本，统一编译选项，
+完全源码编译来解决。而且这是对个人心智负担最小的方式。
+
+你用各个模块链接的方式，不可避免有人在编译失败时就会想要不静态链接试试？这样就会不可避免导致这个问题。比如说，之前我们项目头文件的排序方式是按照和当前文件的相关度排序，
+这种方式甚至没有直接按照字母排序好。因为这完全无法客观衡量，而且给人带来的心智负担是巨大的。最后的结果一定是头文件的排序乱七八糟。
