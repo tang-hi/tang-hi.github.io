@@ -25,7 +25,7 @@ r
 
 gdb 的结果如下
 
-![valgrind](https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/double-free.png)
+![gdb](https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/250222_22h29m04s_screenshot.png)
 
 看到上面的报错信息和堆栈时，我当时有点慌张，没有任何业务代码，只有一堆系统和C++标准库的符号，但是就像
 博客名称`Don't Panic`一样，计算机没有魔法，一切东西都可以找到解释。从这个堆栈中，我们至少可以看到
@@ -36,6 +36,8 @@ gdb ./your_program
 watch *0x55555556b2d0
 r
 ```
+
+![delete](https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/250222_22h30m45s_screenshot.png)
 
 我们发现delete的是一个 `std::string` 对象，这个对象的内存地址是`0x55555556b2d0`，检查代码可以发现这个对象是一个静态成员变量。
 
@@ -67,6 +69,8 @@ std::string Foo::getFoo() {
 break operator delete if $rdi = 0x55555556b2d0
 r
 ```
+
+![break](https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/250222_22h42m07s_screenshot.png)
 
 我们可以看到在程序依赖的两个so析构时，这个地址被`delete`了两次，这就是`double free`的原因。当时我猜测应该就是链接导致两个so都认为自己拥有这个符号。
 因为我们这个程序的链接关系相当错综复杂，极易出错。因此我猜测式的修改了一下链接的方式，暂时解决了这个问题。
