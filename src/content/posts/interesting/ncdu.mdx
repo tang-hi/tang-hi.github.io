@@ -1,0 +1,241 @@
+---
+title: 为什么ncdu这么快？
+pubDate: 2025-03-10
+categories:
+  - Interesting
+  - Work
+  - Thoughts
+description: '上周被同事发现我就是导致组里磁盘满的罪魁祸首后，由此引发的一系列有趣调试历程'
+---
+
+我们组的开发模式是多人共用一台开发机，因此开发机的磁盘空间成了常见问题，三天两头就会出现`No space left on device`的错误。
+上周磁盘再次爆满，同事使用`ncdu`查看磁盘占用情况，发现我就是导致磁盘满的罪魁祸首。他分享的截图类似于下面这样：
+![ncdu](https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/20250310225708.png)
+
+我也登上机器，在根目录执行了`ncdu`。令我惊讶的是，`ncdu`的速度相当快，几乎10秒钟就扫描完了1.3T的磁盘空间。
+而平时如果在根目录执行`du -sh /`，则需要将近一分钟的时间。这不禁让我好奇：`ncdu`为什么这么快？
+
+## 探索过程
+
+最初我猜想`ncdu`是否使用了多线程进行扫描，于是我查看了`ncdu`的`Release Note`。发现`ncdu`直到2.0版本用Zig重写
+后才支持多线程扫描。而我使用的是1.20版本，所以并非多线程扫描。随后我又阅读了`ncdu`的源码，想看看它是否用了什么神奇的
+算法。它扫描文件的核心代码如下：
+```c
+/* Walks through the directory that we're currently chdir'ed to. *dir contains
+ * the filenames as returned by dir_read(), and will be freed automatically by
+ * this function. */
+static int dir_walk(char *dir) {
+  int fail = 0;
+  char *cur;
+
+  fail = 0;
+  for(cur=dir; !fail&&cur&&*cur; cur+=strlen(cur)+1) {
+    dir_curpath_enter(cur);
+    memset(buf_dir, 0, offsetof(struct dir, name));
+    memset(buf_ext, 0, sizeof(struct dir_ext));
+    fail = dir_scan_item(cur);
+    dir_curpath_leave();
+  }
+
+  free(dir);
+  return fail;
+}
+```
+代码看起来也平平无奇，就是遍历目录下的文件，然后调用`dir_scan_item`扫描文件，无法解释`ncdu`为什么这么快。
+
+最后我在Google上搜索了"Why ncdu is fast"，发现有人提出了类似问题：[Why is du -sh faster after running ncdu?](https://superuser.com/questions/1531603/why-is-du-sh-faster-after-running-ncdu)
+
+看到这个问题时，答案已经呼之欲出了——这是因为`Page Cache`的作用。**`ncdu`本身并不特别快**，但当我同事预先使用`ncdu`扫描了磁盘后，`Page Cache`中已经缓存了部分文件信息，所以当我
+第二次执行`ncdu`时，只需10秒钟就能完成扫描。
+
+为了验证我的猜想，我使用`echo 3 > /proc/sys/vm/drop_caches`清空了`Page Cache`，然后再次执行`ncdu`。果然，`ncdu`的速度和`du -sh /`相近，都需要将近一分钟的时间。
+在此基础上，我进一步分别测试了：
+
+`echo 1 > /proc/sys/vm/drop_caches`（清除页面缓存）
+
+`echo 2 > /proc/sys/vm/drop_caches`（清除目录项和inode缓存）
+
+它们的执行时间如下所示：
+
+> echo 3 > /proc/sys/vm/drop_caches (60秒)
+
+> echo 1 > /proc/sys/vm/drop_caches (60秒)
+
+> echo 2 > /proc/sys/vm/drop_caches (16秒)
+
+这是因为`ncdu`扫描文件系统时，需要完成两项工作：
+1. 读取文件夹的内容，获取该文件夹下的文件和inode信息（此时使用page cache，因为文件夹本质上是一种特殊文件）
+2. 根据文件名，获取inode信息以及文件大小等信息（此时使用dentries和inodes缓存，获取文件大小不需要读取文件内容）
+
+所以当`Page Cache`被清空后，`ncdu`每次扫描文件都需要重新发起磁盘I/O操作。
+而仅清空`dentries and inodes cache`后，`ncdu`只需要重新获取文件的inode信息，读取量相较于完全清空`Page Cache`时少了很多，所以速度会快很多。
+
+为了进一步验证我的猜想，我使用`perf`工具对`du`进行了性能分析：
+
+```shell
+sudo perf stat -e major-faults -e minor-faults sudo du -sh /
+```
+
+出乎意料的是，无论`Page Cache`是否被清空，`du`的`major-faults`都是0，而`minor-faults`的数量也大体一致。
+这似乎表明并没有发生磁盘I/O操作。但是执行速度确实有很大差异，而且CPU的利用率也证实了这一点：缓存被清空后的`du`的CPU利用率仅为
+20%，而有缓存时的`du`的CPU利用率几乎达到100%。这表明当缓存被清空后，CPU的时间主要花在了等待磁盘I/O上。
+
+这个问题困扰了我很久，直到我回顾之前编写`xv6`的经验，才意识到`page faults`仅仅指的是访问内存时发生的缺页中断次数，只有当使用`mmap`时，
+`Page Cache Miss`和`Page faults`才有直接关系。这意味着我花了很长时间，却在测量一个与问题无关的指标。:(
+
+### 衡量Page Cache的命中率
+
+那么如何正确地衡量`Page Cache`的命中率呢？perf工具似乎并没有提供相关的观测手段。此时，我想这是一个绝佳的机会来学习`eBPF`——通过hook相关的系统调用，统计`Page Cache`的命中率。在DeepSeek的帮助下，我很快就得到了一个`eBPF`程序（实现原理类似于`cachestat`工具）：
+
+```python
+#!/usr/bin/env python3
+
+from bcc import BPF
+from time import sleep, strftime
+import signal
+
+# signal handler
+def signal_ignore(signal, frame):
+    print()
+
+# define BPF program
+bpf_text = """
+#include <uapi/linux/ptrace.h>
+
+struct key_t {
+    u32 nf;
+};
+
+enum {
+    NF_APCL,
+    NF_MPA,
+    NF_MBD,
+    NF_APD,
+};
+
+BPF_HASH(counts, struct key_t);
+
+static int __do_count(void *ctx, u32 nf) {
+    struct key_t key = {};
+    key.nf = nf;
+    counts.atomic_increment(key);
+    return 0;
+}
+
+int do_count_apcl(struct pt_regs *ctx) {
+    return __do_count(ctx, NF_APCL);
+}
+
+int do_count_mpa(struct pt_regs *ctx) {
+    return __do_count(ctx, NF_MPA);
+}
+
+int do_count_mbd(struct pt_regs *ctx) {
+    return __do_count(ctx, NF_MBD);
+}
+
+int do_count_apd(struct pt_regs *ctx) {
+    return __do_count(ctx, NF_APD);
+}
+
+int do_count_apd_tp(void *ctx) {
+    return __do_count(ctx, NF_APD);
+}
+"""
+
+# load BPF program
+b = BPF(text=bpf_text)
+
+if BPF.get_kprobe_functions(b'filemap_add_folio'):
+    b.attach_kprobe(event="filemap_add_folio", fn_name="do_count_apcl")
+else:
+    b.attach_kprobe(event="add_to_page_cache_lru", fn_name="do_count_apcl")
+
+if BPF.get_kprobe_functions(b'folio_mark_accessed'):
+    b.attach_kprobe(event="folio_mark_accessed", fn_name="do_count_mpa")
+else:
+    b.attach_kprobe(event="mark_page_accessed", fn_name="do_count_mpa")
+
+# Function account_page_dirtied() is changed to folio_account_dirtied() in 5.15.
+# Both folio_account_dirtied() and account_page_dirtied() are
+# static functions and they may be gone during compilation and this may
+# introduce some inaccuracy, use tracepoint writeback_dirty_{page,folio},
+# instead when attaching kprobe fails, and report the running
+# error in time.
+if BPF.get_kprobe_functions(b'folio_account_dirtied'):
+    b.attach_kprobe(event="folio_account_dirtied", fn_name="do_count_apd")
+elif BPF.get_kprobe_functions(b'account_page_dirtied'):
+    b.attach_kprobe(event="account_page_dirtied", fn_name="do_count_apd")
+elif BPF.tracepoint_exists("writeback", "writeback_dirty_folio"):
+    b.attach_tracepoint(tp="writeback:writeback_dirty_folio", fn_name="do_count_apd_tp")
+elif BPF.tracepoint_exists("writeback", "writeback_dirty_page"):
+    b.attach_tracepoint(tp="writeback:writeback_dirty_page", fn_name="do_count_apd_tp")
+else:
+    raise Exception("Failed to attach kprobe %s or %s or any tracepoint" %
+                    ("folio_account_dirtied", "account_page_dirtied"))
+b.attach_kprobe(event="mark_buffer_dirty", fn_name="do_count_mbd")
+
+# check whether hash table batch ops is supported
+htab_batch_ops = True if BPF.kernel_struct_has_field(b'bpf_map_ops',
+                                                    b'map_lookup_and_delete_batch') == 1 else False
+
+# header
+print("%-8s %8s %8s %8s %8s" % ("TIME", "HITS", "MISSES", "DIRTIES", "BUFFDIRTIES"))
+
+exiting = 0
+while 1:
+    try:
+        sleep(1)
+    except KeyboardInterrupt:
+        exiting = 1
+        signal.signal(signal.SIGINT, signal_ignore)
+
+    counts = b["counts"]
+    apcl = 0
+    mpa = 0
+    mbd = 0
+    apd = 0
+    for k, v in counts.items():
+        if k.nf == 0:  # NF_APCL
+            apcl = max(0, v.value)
+        if k.nf == 1:  # NF_MPA
+            mpa = max(0, v.value)
+        if k.nf == 2:  # NF_MBD
+            mbd = max(0, v.value)
+        if k.nf == 3:  # NF_APD
+            apd = max(0, v.value)
+
+    misses = apcl - apd
+    total = mpa - mbd
+    hits = total - misses
+
+    if misses < 0:
+        misses = 0
+    if total < 0:
+        total = 0
+
+    if hits < 0:
+        misses = total
+        hits = 0
+
+    if total > 0:
+        ratio = float(hits) / total
+    else:
+        ratio = 0
+
+    print("%-8s %8d %8d %8d %8d" % (strftime("%H:%M:%S"), hits, misses, apd, mbd))
+
+    counts.clear()
+
+    if exiting:
+        print("Detaching...")
+        exit()
+```
+
+通过这个程序，我清楚地观察到：当冷启动`ncdu`时，会有大量的Cache Miss；而当`Page Cache`被预热后，几乎所有的访问都是Hit。这也完美解释了为什么`ncdu`第二次扫描会如此快速。
+
+## 总结
+
+正如jyy在南大操作系统课上所说，计算机没有魔法，它本质上就是一个状态机，一切都可以找到一个解释。
+
+Don't panic, just Keep calm and Debug on.
