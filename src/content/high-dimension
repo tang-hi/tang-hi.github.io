@@ -1,0 +1,185 @@
+---
+title: 探索高维向量：维度、距离特性与高效搜索策略
+pubDate: 2025-05-18
+categories: 
+  - vector search
+  - database
+  - interesting
+description: '随着向量搜索的广泛使用，我们需要计算的向量维数也越来越高，由此带来的计算/存储压力也越来越大。那么在高维向量中，有什么特性是可以被我们所利用，从而减少距离计算时间/存储成本? 本文将试图回答这一问题。'
+---
+
+<link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/katex@0.15.2/dist/katex.min.css"
+    integrity="sha384-MlJdn/WNKDGXveldHDdyRP1R4CTHr3FeuDNfhsLPYrq2t0UBkUdK2jyTnXPEK1NQ"
+    crossorigin="anonymous"
+/>
+
+随着向量搜索的广泛应用，向量维度已从几十增长到上千，带来了显著的计算和存储压力。本文将探讨如何利用高维向量的特性来应对这些挑战，主要包含以下内容：
+
+1. **高维向量的独有特性**
+2. **AdSampling** 算法的原理与实现
+3. **RaBitQ** 算法的原理与实现
+4. **总结与展望**
+
+## 高维向量的独有特性
+
+为了提升文章的可读性，本文**非必要不进行数学推导**，而是给读者一个感性的认识，并通过代码实验验证结论。
+
+### 1. 在高维空间中，任意两个向量几乎都是正交的
+
+如果提问我们在二维空间中，随机生成两个向量，它们之间的夹角是多少？我们可能会理所当然的认为，在[$0, 180$]之间任意的角度都有可能。
+但是当这个问题来到高维空间时，答案就不是这样了。我们可以通过下面的代码来验证这个结论。
+
+[Github Gist](https://gist.github.com/tang-hi/3ef51ddab75961a3a80304aeec348bd9)
+
+从运行结果可以看到，**随着维度的增加，任意两个随机向量的夹角趋近于 $90^\circ$，即几乎正交**。这说明在高维空间中，任意两个向量几乎都是正交的。
+
+![高维向量的夹角分布](https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/high-angles.png)
+
+详细证明可参考[这里](https://www.spaces.ac.cn/archives/7076)。
+
+### 2. 存储 $N$ 个向量，只需要 $\mathcal{O}(\log N)$ 维空间
+
+这个特性实际上是 **JL引理**（Johnson-Lindenstrauss Lemma）的一个应用。**JL引理** 是一个非常重要的结论，它表明对高维向量进行降维时，在保持相对距离基本不变的情况下，降维后的维数只与**向量的个数**有关，而与原始维数无关。
+
+也就是说，**我们只需要 $\mathcal{O}(\log N)$ 维的空间就可以存储 $N$ 个向量**。
+
+这个结论也回答了一个常见问题：**向量的维数是否会随着业务/时间的推移而无限增加？**
+
+答案是：**不会**。因为我们需要处理的向量个数是有限的，所以只需要 $\mathcal{O}(\log N)$ 维即可保证较高的召回率。
+
+> 之前了解到有团队在调研如何使用软硬件结合的方式处理4096维的向量，但也许他们永远不会遇到4096维的向量。:)
+
+有兴趣的读者可以参考[这篇文章](https://www.spaces.ac.cn/archives/8679/comment-page-1)，里面详细介绍了 **JL引理** 的证明过程。事实上，**JL引理** 还有许多有用的推论，后文也会用到。
+
+接下来介绍两篇论文，分别是 [`AdSampling`](https://arxiv.org/abs/2303.09855) 和 [`RaBitQ`](https://arxiv.org/abs/2405.12497) 算法，这两者都利用了高维向量的特性来减少计算和存储压力。
+
+
+## AdSampling 算法的原理与实现
+在介绍AdSampling之前，我们先考虑这么一个场景。如果我们先要判断两个1024维的向量，它们的L2距离是否小于某个阈值？我们一般的做法就是计算每一个维度的差值，然后计算他们的平方和。
+也就是说我们需要计算1024次的乘法和加法。有没有什么办法，可以在还没有计算完所有维度的情况下就判断出这两个向量的L2距离是否小于某个阈值呢？
+
+## RaBitQ 算法的原理与实现
+
+首先介绍 **RaBitQ**，这是一种量化算法，可以将 $D$ 维向量压缩成 $D$ 个比特（对于 `float` 而言，相当于 $32\times$ 的压缩比例），同时保证 `L2` 距离计算的精度误差，从而保证较高的召回率。
+
+由于 `L2` 距离是无界的（取值范围为 $[0, +\infty)$），而 **RaBitQ** 需要保证距离计算的精度误差，因此在构建索引时，首先需要对原始向量进行归一化，即
+
+$$ o := \frac{o_r - c}{\|o_r - c\|} $$
+
+其中，$$o_r$$ 是原始向量，$$o$$ 是归一化后的向量，$$c$$ 是中心向量。
+
+### 1. RaBitQ 索引构建
+
+所有向量量化都可分为两步：
+
+- 确定 **codebook**
+- 根据 **codebook** 对向量进行量化
+
+#### 1.1 确定 `codebook`
+
+由于所有向量都做了归一化处理，数据点大致均匀分布在单位超球面上。因此，直观上 `codebook` 应具备以下特点：
+
+1. **均匀分布在单位超球面上**
+2. **每个维度只有两个可能的取值（便于压缩为 1 个比特）**
+
+一种自然的 `codebook` 构造方式是：每个维度只取两个值 $+\frac{1}{\sqrt{D}}$ 和 $-\frac{1}{\sqrt{D}}$，所有组合构成 $2^D$ 个单位向量。即：
+
+$$
+C := \left\{ \left( \pm \frac{1}{\sqrt{D}}, \pm \frac{1}{\sqrt{D}}, \ldots, \pm \frac{1}{\sqrt{D}} \right) \right\}
+$$
+
+这种构造方式保证了 `codebook` 均匀分布在单位超球面上，并且每个维度只有两种可能的取值。
+
+但这种方式仍有缺陷：对某些单位向量的量化误差非常小（如 $(\frac{1}{\sqrt{D}}, ..., \frac{1}{\sqrt{D}})$），但对另一些（如 $(1, 0, ..., 0)$）则误差较大。
+
+为解决此问题，可以给 `codebook` 加入“随机旋转”：先随机生成一个正交矩阵 $P$，用 $P$ 对 `codebook` 里的每个向量做一次旋转，得到最终的 `codebook`：
+
+$$
+C_{\text{rand}} := \{ P x \mid x \in C \}
+$$
+
+这样，所有 `codebook` 向量依然是单位向量，且经过随机旋转后，原本偏向某些方向的“偏好”被消除了，所有方向都一视同仁。
+
+#### 1.2 根据 `codebook` 对向量进行量化
+
+确定 `codebook` 后，对向量量化的目标是：**找到与待量化向量距离最近的 `codebook` 向量，并用它替代原始向量**。即：
+
+$$
+\mathop{\arg\min}_{x \in C} \| o - P x \|^2
+$$
+
+推导后可得：
+
+$$
+= \mathop{\arg\max}_{x \in C} \langle o, P x \rangle
+$$
+
+利用正交矩阵的性质，有：
+
+$$
+\langle o, P x \rangle = \langle P^{-1} o, x \rangle
+$$
+
+其中 $P^{-1}$ 是正交矩阵 $P$ 的逆（等于其转置）。$P^{-1}$ 和 $o$ 都已知，可以直接计算。要使 $\langle o, P x \rangle$ 最大，只需找到与 $P^{-1} o$ 每一维正负号相同的 `codebook` 向量即可。
+
+因此，对向量 $o$ 进行量化的步骤为：
+
+1. 保存构建 `codebook` 时所用的 $P$
+2. 计算 $P^{-1} o$
+3. 取 $P^{-1} o$ 每一维的正负号
+   - 正：该维取 $+\frac{1}{\sqrt{D}}$
+   - 负：该维取 $-\frac{1}{\sqrt{D}}$
+4. 用 $P$ 对量化后的向量反变换，得到最终量化结果
+
+### 2. RaBitQ 索引查询
+
+量化后，可以对向量进行查询。我们需要考虑原始向量和查询向量的 `L2` 距离：
+
+$$
+\| o_r - q_r \|^2 = \| (o_r - c) - (q_r - c) \|^2
+$$
+
+$$
+= \| o_r - c \|^2 + \| q_r - c \|^2 - 2 \cdot \| o_r - c \| \cdot \| q_r - c \| \cdot \langle q, o \rangle
+$$
+
+其中 $o_r$ 和 $q_r$ 分别是原始和查询向量，$c$ 是中心向量。$\| o_r - c \|$ 可在索引构建时计算，$\| q_r - c \|$ 在查询时仅需计算一次。因此，**只需计算 $\langle q, o \rangle$**。
+
+现在有了量化后的向量 $\bar{o}$ 和归一化向量 $o$，如何用 $\langle \bar{o}, o \rangle$ 表示 $\langle q, o \rangle$？
+
+直接给出公式(推导见文末)：
+
+$$
+\langle \bar{o}, q \rangle = \langle \bar{o}, o \rangle \cdot \langle o, q \rangle + \langle \bar{o}, e_1 \rangle \cdot \sqrt{1 - \langle o, q \rangle^2}
+$$
+
+其中 $e_1$ 是垂直于 $o$ 的单位向量。
+
+还记得前文提到的高维特性吗？**在高维空间中，任意两个向量几乎都是正交的**。$\bar{o}$ 为经过随机旋转的向量，因此可以近似认为 $\bar{o}$ 和 $e_1$ 是两个随机向量，即 $\langle \bar{o}, e_1 \rangle$ 近似为 $0$。
+
+因此有：
+
+$$
+\langle \bar{o}, q \rangle \approx \langle \bar{o}, o \rangle \cdot \langle o, q \rangle
+$$
+
+这样，计算误差也有了较为确定的界限，即 $\langle \bar{o}, e_1 \rangle \cdot \sqrt{1 - \langle o, q \rangle^2}$。
+
+现在要计算 $\langle q, o \rangle$，只需计算 $\langle \bar{o}, o \rangle$ 和 $\langle o, q \rangle$。其中 $\langle \bar{o}, o \rangle$ 可在索引构建时计算好。如何高效计算 $\langle \bar{o}, q \rangle$？
+
+为方便计算，可将 $\bar{o}$ 转为 0/1 的二进制格式，即乘以 $P^{-1}$（内积乘以正交矩阵不改变内积值）：
+
+$$
+\langle \bar{o}, q \rangle = \langle P \bar{x}, q \rangle = \langle \bar{x}, P^{-1} q \rangle
+$$
+
+其中 $\bar{x}$ 是 $\pm \frac{1}{\sqrt{D}}$。只需对输入的查询向量做一次正交变换，得到 $P^{-1} q$，然后根据量化向量的正负号取对应符号，最后结果除以 $\sqrt{D}$ 即可。
+
+当然，为提升效率，论文中还有许多工程优化，详细代码可参考[原作者 Github](https://github.com/gaoj0017/RaBitQ) 或我的[复现](https://github.com/tang-hi/rabitQ)。
+
+### 3. RaBitQ 算法总结
+
+**RaBitQ** 算法的核心在于利用正交矩阵的各种特性完成高维向量的压缩与查询，同时利用高维向量“几乎正交”的特性给误差确定了上下界。这两点结合，使得 **RaBitQ** 在高达 $32\times$ 压缩率下，仍能保持 95% 以上的召回率。
+
+本文未能覆盖 RaBitQ 的所有细节，更多内容建议读者参考[原文](https://arxiv.org/abs/2405.12497)。
