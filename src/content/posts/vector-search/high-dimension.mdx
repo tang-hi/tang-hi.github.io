@@ -1,6 +1,6 @@
 ---
-title: 探索高维向量：维度、距离特性与高效搜索策略
-pubDate: 2025-05-18
+title: 揭秘高维向量：巧用“反直觉”特性，让向量搜索飞起来！
+pubDate: 2025-05-22
 categories: 
   - vector search
   - database
@@ -19,7 +19,7 @@ description: '随着向量搜索的广泛使用，我们需要计算的向量维
 1. **高维向量的独有特性**
 2. **AdSampling** 算法的原理与实现
 3. **RaBitQ** 算法的原理与实现
-4. **总结与展望**
+4. **总结**
 
 ## 高维向量的独有特性
 
@@ -32,7 +32,7 @@ description: '随着向量搜索的广泛使用，我们需要计算的向量维
 
 [Github Gist](https://gist.github.com/tang-hi/3ef51ddab75961a3a80304aeec348bd9)
 
-从运行结果可以看到，**随着维度的增加，任意两个随机向量的夹角趋近于 $90^\circ$，即几乎正交**。这说明在高维空间中，任意两个向量几乎都是正交的。
+从运行结果可以看到，**随着维度的增加，任意两个随机向量的夹角趋近于 $90^\circ$，即几乎正交**。这说明在高维空间中，任意两个向量几乎都是垂直的。
 
 ![高维向量的夹角分布](https://hayesx-1302722143.cos.ap-singapore.myqcloud.com/img/high-angles.png)
 
@@ -56,7 +56,7 @@ description: '随着向量搜索的广泛使用，我们需要计算的向量维
 
 
 ## AdSampling 算法的原理与实现
-在介绍 `AdSampling` 之前，我们先考虑一个场景。假设我们需要判断两个1024维的向量，它们的 **`L2`距离** 是否小于某个**`阈值`**？通常的做法是计算**每个维度的差值平方和**。这意味着需要进行1024次乘法和加法运算。那么，有没有办法在**未计算完所有维度**的情况下，就判断出这两个向量的`L2`距离是否小于该`阈值`呢？答案是肯定的。
+在介绍 `AdSampling` 之前，我们先考虑一个场景。假设我们需要判断两个1024维的向量，它们的 **`L2`距离** 是否小于某个 **`阈值`** ？通常的做法是计算**每个维度的差值平方和**。这意味着需要进行1024次乘法和加法运算。那么，有没有办法在**未计算完所有维度**的情况下，就判断出这两个向量的`L2`距离小于该`阈值`呢？答案是肯定的。
 
 通过 **`JL引理`**（Johnson-Lindenstrauss Lemma），我们有如下公式：
 
@@ -79,7 +79,7 @@ $$
 
 `AdSampling` 是一个相对容易实现的算法，对现有代码改动较小（其难点主要在于数学推导，而原论文作者已完成这部分工作）。然而，需要注意的一点是，由于在计算距离时，每个 `batch` 都需要进行`阈值`判断，其**单次距离计算时间可能会慢于直接使用 `SIMD` 指令进行全维度计算的方式**。因此，若想在如图搜索算法 `HNSW` 中应用 `AdSampling` 并获得显著性能提升，更推荐直接实现论文中提出的 `AKNN++` 方案，通过**大量被跳过的维度计算来弥补距离计算本身的时间开销**。
 
-详细实现可参考[原作者的 GitHub 仓库](https://github.com/gaoj0017/ADSampling)或笔者的[复现代码](https://github.com/tang-hi/bnsw)。
+详细实现可参考[原作者的 GitHub 仓库](https://github.com/gaoj0017/ADSampling)或我的[复现代码](https://github.com/tang-hi/bnsw)。
 
 ## RaBitQ 算法的原理与实现
 首先介绍 **RaBitQ**，这是一种量化算法，可以将 $D$ 维向量压缩成 $D$ 个比特（对于 `float` 而言，相当于 $32\times$ 的压缩比例），同时保证 `L2` 距离计算的精度误差，从而保证较高的召回率。
@@ -153,6 +153,8 @@ $$
    - 负：该维取 $-\frac{1}{\sqrt{D}}$
 4. 用 $P$ 对量化后的向量反变换，得到最终量化结果
 
+这样，我们实际上只需要存储 $P^{-1} o$ 每一维的正负号(因为每一维的绝对值都是固定的 $\frac{1}{\sqrt{D}}$，正负号决定了该维度是取 $+\frac{1}{\sqrt{D}}$ 还是 $-\frac{1}{\sqrt{D}}$)，即 $D$ 个比特，就可以表示原始的 $D$ 维浮点数向量（通常每个维度需要32个比特），实现了惊人的压缩效果.
+
 ### 2. RaBitQ 索引查询
 
 量化后，可以对向量进行查询。我们需要考虑原始向量和查询向量的 `L2` 距离：
@@ -169,7 +171,7 @@ $$
 
 现在有了量化后的向量 $\bar{o}$ 和归一化向量 $o$，如何用 $\langle \bar{o}, o \rangle$ 表示 $\langle q, o \rangle$？
 
-直接给出公式(推导见文末)：
+直接给出公式(推导见附录)：
 
 $$
 \langle \bar{o}, q \rangle = \langle \bar{o}, o \rangle \cdot \langle o, q \rangle + \langle \bar{o}, e_1 \rangle \cdot \sqrt{1 - \langle o, q \rangle^2}
@@ -204,3 +206,43 @@ $$
 **RaBitQ** 算法的核心在于利用正交矩阵的各种特性完成高维向量的压缩与查询，同时利用高维向量“几乎正交”的特性给误差确定了上下界。这两点结合，使得 **RaBitQ** 在高达 $32\times$ 压缩率下，仍能保持 95% 以上的召回率。
 
 本文未能覆盖 RaBitQ 的所有细节，更多内容建议读者参考[原文](https://arxiv.org/abs/2405.12497)。
+
+### 总结
+
+这两篇论文都是同一个[团队](https://personal.ntu.edu.sg/c.long/pages/team.html)所做出的工作。相较于其他论文从工程角度上出发对向量检索进行优化。
+他们从数学的角度上出发，利用高维向量的特性，优化距离计算，这一最基础也是最耗时的部分，并取得了不错的效果。
+这无疑给向量检索带来新的思路。尽管论文仅仅只对`L2`距离进行了研究，但是对于其他的距离度量，应该也是可以获得差不多的效果。
+
+### 附录
+
+推导
+$$
+\langle \bar{o}, q \rangle = \langle \bar{o}, o \rangle \cdot \langle o, q \rangle + \langle \bar{o}, e_1 \rangle \cdot \sqrt{1 - \langle o, q \rangle^2}
+$$
+
+我们将 $q$ 拆为两个单位向量 $o$ 和 $e_1$ （$e_1$ 是垂直于 $o$ 的单位向量）的组合,即
+$$
+q = o cos\theta + e_1 sin\theta
+$$
+
+其中的 $\theta$ 表示 $q$ 和 $o$ 的夹角, 对于单位向量而言，它们之间的点积等于 $cos\theta$
+所以我们可以把上述公式写为
+$$
+q = \langle q, o \rangle \cdot o + \sqrt{1 - \langle q, o \rangle^2} e_1
+$$
+
+我们把上述公式代入到 $\langle \bar{o}, q \rangle$ 中
+$$
+\langle \bar{o}, q \rangle = \langle \bar{o}, \langle q, o \rangle \cdot o + \sqrt{1 - \langle q, o \rangle^2} e_1 \rangle
+$$
+
+根据点积的结合律，我们可以得到
+$$
+\langle \bar{o}, q \rangle = \langle \bar{o}, \langle q, o \rangle \cdot o \rangle + \langle \bar{o}, \sqrt{1 - \langle q, o \rangle^2} e_1 \rangle
+$$
+
+我们再将标量提取出来, 即可完成推导
+$$
+\langle \bar{o}, q \rangle = \langle \bar{o}, o \rangle \cdot \langle o, q \rangle + \langle \bar{o}, e_1 \rangle \cdot \sqrt{1 - \langle o, q \rangle^2}
+$$
+
