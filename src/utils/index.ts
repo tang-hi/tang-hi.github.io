@@ -20,15 +20,26 @@ export async function getCategories() {
   return categories
 }
 
-export async function getPosts() {
+export async function getAllPosts() {
   const posts = await getCollection('posts')
   posts.sort((a, b) => {
     const aDate = a.data.pubDate || new Date()
     const bDate = b.data.pubDate || new Date()
     return -1 * (aDate.getTime() - bDate.getTime())
   })
-  const visiblePosts = posts.filter(post =>  !(post.data.categories && post.data.categories.includes('annual-review')));
+  return posts
+}
+
+export async function getPosts() {
+  const posts = await getAllPosts()
+  const visiblePosts = posts.filter(post =>  !(post.data.categories && (post.data.categories.includes('annual-review') || post.data.categories.includes('notes'))));
   return visiblePosts 
+}
+
+export async function getNotes() {
+  const posts = await getAllPosts()
+  const notes = posts.filter(post => post.data.categories && post.data.categories.includes('notes'));
+  return notes
 }
 
 const parser = new MarkdownIt()

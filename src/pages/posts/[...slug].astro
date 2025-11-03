@@ -1,12 +1,12 @@
 ---
 import Post from '~/components/Post.astro'
 import LayoutDefault from '~/layouts/LayoutDefault.astro'
-import { getPosts } from '~/utils'
+import { getAllPosts } from '~/utils'
 import type { InferGetStaticPropsType, GetStaticPaths } from 'astro'
 import Pagination from '~/components/Pagination.astro'
 
 export const getStaticPaths = (async ({}) => {
-  const posts = await getPosts()
+  const posts = await getAllPosts()
   return posts.map((post, idx) => {
     const prev = posts[idx - 1]
     const next = posts[idx + 1]
