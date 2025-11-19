@@ -1,0 +1,17 @@
+---
+import LayoutDefault from './LayoutDefault.astro'
+
+interface Props {
+  title?: string
+  desc?: string
+  banner?: ImageMetadata
+}
+
+const props = Astro.props as Props
+---
+
+<LayoutDefault {...props}>
+  <article class="heti markdown-body leading-relaxed space-y-6">
+    <slot />
+  </article>
+</LayoutDefault>
