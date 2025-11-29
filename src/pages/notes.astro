@@ -22,14 +22,13 @@ const { translate: t } = Astro.locals
 <LayoutDefault>
   <div un-flex="~ col gap-4">
     <div class="mb-4">
-      <h1 class="text-4 font-bold mb-2">{t('Notes')}</h1>
-      <p class="text-3 opacity-70">一些随笔和思考的记录</p>
+      <h1 class="text-2xl font-bold mb-2">{t('Notes')}</h1>
     </div>
     {
       Array.from(notesByYear.entries()).map(([year, notes]) => (
         <ListSection title={year}>
           {notes.map((note) => (
-            <ListItem title={note.data.title} href={`/posts/${note.slug}/`} description={formatDate(note.data.pubDate)} />
+            <ListItem title={note.data.title} href={`/posts/${note.slug}/`} description={note.data.description} />
           ))}
         </ListSection>
       ))
