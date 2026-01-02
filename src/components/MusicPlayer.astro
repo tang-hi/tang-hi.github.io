@@ -1,0 +1,316 @@
+---
+interface Props {
+  url: string
+  title: string
+  artist?: string
+  cover?: string
+}
+
+const { url, title, artist, cover } = Astro.props
+---
+
+<div class="music-player-bar" data-music-url={url}>
+  <div class="player-inner">
+    {cover && (
+      <div class="cover">
+        <img src={cover} alt={title} />
+      </div>
+    )}
+
+    <button class="play-btn" type="button" aria-label="Play/Pause">
+      <span class="i-mdi-play icon play-icon"></span>
+      <span class="i-mdi-pause icon pause-icon"></span>
+    </button>
+
+    <div class="track-info">
+      <span class="track-title">{title}</span>
+      {artist && <span class="track-artist">{artist}</span>}
+    </div>
+
+    <div class="progress-section">
+      <span class="current-time">0:00</span>
+      <div class="progress-bar">
+        <div class="progress-fill"></div>
+        <div class="progress-handle"></div>
+      </div>
+      <span class="total-time">0:00</span>
+    </div>
+  </div>
+
+  <audio class="audio-element" preload="metadata">
+    <source src={url} type="audio/mpeg" />
+  </audio>
+</div>
+
+<style>
+  .music-player-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 48px;
+    background: var(--bg, #ffffff);
+    border-top: 1px solid var(--fg, #2e405b);
+    z-index: 1000;
+    --fg: #2e405b;
+    --bg: #ffffff;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .music-player-bar {
+      --fg: #ffffff;
+      --bg: #2e405b;
+    }
+  }
+
+  .player-inner {
+    max-width: 72rem;
+    height: 100%;
+    margin: 0 auto;
+    padding: 0 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .cover {
+    width: 36px;
+    height: 36px;
+    border-radius: 4px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .play-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1.5px solid var(--fg);
+    background: var(--bg);
+    color: var(--fg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+  }
+
+  .play-btn:hover {
+    background: var(--fg);
+    color: var(--bg);
+  }
+
+  .play-btn .icon {
+    font-size: 1rem;
+  }
+
+  .play-btn .pause-icon {
+    display: none;
+  }
+
+  .play-btn.playing .play-icon {
+    display: none;
+  }
+
+  .play-btn.playing .pause-icon {
+    display: block;
+  }
+
+  .track-info {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    min-width: 0;
+    flex-shrink: 0;
+    max-width: 200px;
+  }
+
+  .track-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--fg);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .track-artist {
+    font-size: 0.75rem;
+    color: var(--fg);
+    opacity: 0.6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .progress-section {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+
+  .current-time,
+  .total-time {
+    font-size: 0.7rem;
+    font-family: monospace;
+    color: var(--fg);
+    opacity: 0.8;
+    min-width: 32px;
+    text-align: center;
+  }
+
+  .progress-bar {
+    flex: 1;
+    height: 4px;
+    background: var(--fg);
+    opacity: 0.2;
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .progress-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background: var(--fg);
+    opacity: 1;
+    border-radius: 2px;
+    width: 0%;
+    pointer-events: none;
+  }
+
+  .progress-handle {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 10px;
+    height: 10px;
+    background: var(--fg);
+    border-radius: 50%;
+    left: 0%;
+    opacity: 0;
+    transition: opacity 0.15s;
+    cursor: grab;
+  }
+
+  .progress-bar:hover .progress-handle {
+    opacity: 1;
+  }
+
+  /* Mobile: hide artist, simplify layout */
+  @media (max-width: 640px) {
+    .track-artist {
+      display: none;
+    }
+    .track-info {
+      max-width: 120px;
+    }
+    .current-time,
+    .total-time {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  function initMusicPlayers() {
+    document.querySelectorAll('.music-player-bar').forEach((player) => {
+      if ((player as HTMLElement).dataset.initialized) return
+      ;(player as HTMLElement).dataset.initialized = 'true'
+
+      const audio = player.querySelector('.audio-element') as HTMLAudioElement
+      const playBtn = player.querySelector('.play-btn') as HTMLButtonElement
+      const progressBar = player.querySelector('.progress-bar') as HTMLElement
+      const progressFill = player.querySelector('.progress-fill') as HTMLElement
+      const progressHandle = player.querySelector('.progress-handle') as HTMLElement
+      const currentTimeEl = player.querySelector('.current-time') as HTMLElement
+      const totalTimeEl = player.querySelector('.total-time') as HTMLElement
+
+      function formatTime(seconds: number): string {
+        if (isNaN(seconds) || !isFinite(seconds)) return '0:00'
+        const mins = Math.floor(seconds / 60)
+        const secs = Math.floor(seconds % 60)
+        return `${mins}:${secs.toString().padStart(2, '0')}`
+      }
+
+      function updateProgress() {
+        if (audio.duration) {
+          const percent = (audio.currentTime / audio.duration) * 100
+          progressFill.style.width = `${percent}%`
+          progressHandle.style.left = `${percent}%`
+          currentTimeEl.textContent = formatTime(audio.currentTime)
+        }
+      }
+
+      audio.addEventListener('loadedmetadata', () => {
+        totalTimeEl.textContent = formatTime(audio.duration)
+      })
+
+      playBtn.addEventListener('click', () => {
+        if (audio.paused) {
+          audio.play()
+          playBtn.classList.add('playing')
+        } else {
+          audio.pause()
+          playBtn.classList.remove('playing')
+        }
+      })
+
+      audio.addEventListener('timeupdate', updateProgress)
+
+      audio.addEventListener('ended', () => {
+        playBtn.classList.remove('playing')
+        progressFill.style.width = '0%'
+        progressHandle.style.left = '0%'
+      })
+
+      progressBar.addEventListener('click', (e) => {
+        const rect = progressBar.getBoundingClientRect()
+        const percent = (e.clientX - rect.left) / rect.width
+        audio.currentTime = percent * audio.duration
+      })
+
+      let isDragging = false
+
+      progressHandle.addEventListener('mousedown', (e) => {
+        isDragging = true
+        e.preventDefault()
+      })
+
+      document.addEventListener('mousemove', (e) => {
+        if (isDragging) {
+          const rect = progressBar.getBoundingClientRect()
+          let percent = (e.clientX - rect.left) / rect.width
+          percent = Math.max(0, Math.min(1, percent))
+          progressFill.style.width = `${percent * 100}%`
+          progressHandle.style.left = `${percent * 100}%`
+          currentTimeEl.textContent = formatTime(percent * audio.duration)
+        }
+      })
+
+      document.addEventListener('mouseup', (e) => {
+        if (isDragging) {
+          isDragging = false
+          const rect = progressBar.getBoundingClientRect()
+          let percent = (e.clientX - rect.left) / rect.width
+          percent = Math.max(0, Math.min(1, percent))
+          audio.currentTime = percent * audio.duration
+        }
+      })
+    })
+  }
+
+  initMusicPlayers()
+  document.addEventListener('astro:after-swap', initMusicPlayers)
+</script>

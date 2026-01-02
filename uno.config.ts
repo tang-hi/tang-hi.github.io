@@ -57,5 +57,7 @@ export default defineConfig({
     ...socials.map((social) => `i-mdi-${social.name}`),
     'i-mdi-content-copy',
     'i-mdi-check',
+    'i-mdi-play',
+    'i-mdi-pause',
   ],
 })

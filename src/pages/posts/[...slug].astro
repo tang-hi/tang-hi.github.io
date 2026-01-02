@@ -1,6 +1,7 @@
 ---
 import Post from '~/components/Post.astro'
 import LayoutDefault from '~/layouts/LayoutDefault.astro'
+import MusicPlayer from '~/components/MusicPlayer.astro'
 import { getAllPosts } from '~/utils'
 import type { InferGetStaticPropsType, GetStaticPaths } from 'astro'
 import Pagination from '~/components/Pagination.astro'
@@ -17,12 +18,12 @@ export const getStaticPaths = (async ({}) => {
   })
 }) satisfies GetStaticPaths
 
-// type Params = InferGetStaticParamsType<typeof getStaticPaths>
 type Props = InferGetStaticPropsType<typeof getStaticPaths>
 
 const { entry, prev, next } = Astro.props
 const { Content } = await entry.render()
 const { translate: t } = Astro.locals
+const music = entry.data.music
 ---
 
 <LayoutDefault title={entry.data.title} desc={entry.data.description} banner={entry.data.banner}>
@@ -91,3 +92,12 @@ const { translate: t } = Astro.locals
     background-color: #30363d;
   }
 </style>
+
+{music && (
+  <MusicPlayer
+    url={music.url}
+    title={music.title}
+    artist={music.artist}
+    cover={music.cover}
+  />
+)}
