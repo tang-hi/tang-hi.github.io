@@ -72,6 +72,10 @@ article.heti a:has(code):hover {
   background-color: transparent;
 }
 
+.heti {
+  font-family: theme("fontFamily.sans");
+}
+
 article.heti code {
   padding: 2px 4px;
   font-size: 90%;
