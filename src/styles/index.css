@@ -72,8 +72,13 @@ article.heti a:has(code):hover {
   background-color: transparent;
 }
 
-.heti {
+article.heti {
   font-family: theme("fontFamily.sans");
+}
+
+article.heti code,
+article.heti pre {
+  font-family: theme("fontFamily.mono");
 }
 
 article.heti code {

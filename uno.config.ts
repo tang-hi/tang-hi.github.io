@@ -34,7 +34,8 @@ export default defineConfig({
       background
     },
     fontFamily: {
-      sans: '"Maple Mono NF CN","Source Sans Pro","Roboto","Helvetica","Helvetica Neue","Source Han Sans SC","Source Han Sans TC","PingFang SC","PingFang HK","PingFang TC",sans-serif',
+      sans: '"LXGW WenKai","Source Sans Pro","Roboto","Helvetica","Helvetica Neue","Source Han Sans SC","Source Han Sans TC","PingFang SC","PingFang HK","PingFang TC",sans-serif',
+      mono: '"Maple Mono NF CN","SFMono-Regular",consolas,"Liberation Mono",menlo,courier,monospace',
       serif: '"HiraMinProN-W6","Source Han Serif CN","Source Han Serif SC","Source Han Serif TC",serif',
     },
     animation: {
