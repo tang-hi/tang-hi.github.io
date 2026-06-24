@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 336" font-family="-apple-system,'Helvetica Neue',Helvetica,Arial,sans-serif">
+  <defs>
+    <filter id="ns" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="0.8" stdDeviation="0.9" flood-color="#2e405b" flood-opacity="0.16"/>
+    </filter>
+  </defs>
+  <style>
+    .nm{ fill:#eef1f5; stroke:#aab3c2; stroke-width:1.6 }
+    .m{ fill:#e4f3ee; stroke:#2f9e7b; stroke-width:1.8 }
+    .q{ fill:#c7254e; stroke:#9e1c3e; stroke-width:1.3 }
+    .plot{ fill:#fcfdfe; stroke:#e3e8ef; stroke-width:1.5 }
+    .ring{ fill:#2f9e7b; fill-opacity:.06; stroke:#2f9e7b; stroke-width:1.6; stroke-dasharray:5 5 }
+    .title{ font-size:14.5px; font-weight:600; fill:#2e405b }
+    .ok{ font-size:13px; font-weight:600; fill:#2f9e7b }
+    .bad{ font-size:13px; font-weight:600; fill:#c7254e }
+    .small{ font-size:11px; fill:#6b7892 }
+    .note{ font-size:12px; fill:#2e405b }
+  </style>
+
+  <rect x="1.5" y="1.5" width="717" height="333" rx="16" fill="#ffffff" stroke="#e7ebf1" stroke-width="1.5"/>
+
+  <!-- ===== Panel A : correlated ===== -->
+  <g transform="translate(24,0)">
+    <text class="title" x="155" y="34" text-anchor="middle"><tspan class="ok">&#10003;</tspan> Filter correlated with distance</text>
+    <rect class="plot" x="40" y="50" width="230" height="218" rx="10"/>
+    <circle class="nm" cx="70" cy="80" r="6"/><circle class="nm" cx="110" cy="68" r="6"/><circle class="nm" cx="232" cy="74" r="6"/>
+    <circle class="nm" cx="245" cy="120" r="6"/><circle class="nm" cx="64" cy="130" r="6"/><circle class="nm" cx="248" cy="175" r="6"/>
+    <circle class="nm" cx="72" cy="205" r="6"/><circle class="nm" cx="62" cy="250" r="6"/><circle class="nm" cx="108" cy="252" r="6"/>
+    <circle class="nm" cx="205" cy="248" r="6"/><circle class="nm" cx="240" cy="225" r="6"/><circle class="nm" cx="218" cy="92" r="6"/>
+    <circle class="nm" cx="58" cy="170" r="6"/><circle class="nm" cx="178" cy="70" r="6"/><circle class="nm" cx="250" cy="252" r="6"/>
+    <circle class="nm" cx="158" cy="255" r="6"/><circle class="nm" cx="98" cy="108" r="6"/><circle class="nm" cx="232" cy="148" r="6"/>
+    <ellipse class="ring" cx="155" cy="165" rx="50" ry="46"/>
+    <circle class="m" cx="155" cy="165" r="6.5"/><circle class="m" cx="136" cy="150" r="6.5"/><circle class="m" cx="172" cy="152" r="6.5"/>
+    <circle class="m" cx="140" cy="184" r="6.5"/><circle class="m" cx="174" cy="182" r="6.5"/><circle class="m" cx="124" cy="166" r="6.5"/>
+    <circle class="m" cx="186" cy="168" r="6.5"/><circle class="m" cx="158" cy="136" r="6.5"/><circle class="m" cx="150" cy="198" r="6.5"/>
+    <g transform="translate(155,165) rotate(45)" filter="url(#ns)"><rect class="q" x="-7" y="-7" width="14" height="14" rx="3"/></g>
+    <text class="note" x="155" y="296" text-anchor="middle">matching points cluster together</text>
+    <text class="small" x="155" y="314" text-anchor="middle">two-hop links them easily &#8594; ACORN wins</text>
+  </g>
+
+  <line x1="360" y1="48" x2="360" y2="288" stroke="#eceff3" stroke-width="1.5"/>
+
+  <!-- ===== Panel B : uncorrelated ===== -->
+  <g transform="translate(384,0)">
+    <text class="title" x="155" y="34" text-anchor="middle"><tspan class="bad">&#10007;</tspan> Filter unrelated to distance</text>
+    <rect class="plot" x="40" y="50" width="230" height="218" rx="10"/>
+    <circle class="nm" cx="72" cy="78" r="6"/><circle class="nm" cx="120" cy="70" r="6"/><circle class="nm" cx="190" cy="72" r="6"/>
+    <circle class="nm" cx="240" cy="92" r="6"/><circle class="nm" cx="60" cy="118" r="6"/><circle class="nm" cx="150" cy="110" r="6"/>
+    <circle class="nm" cx="232" cy="138" r="6"/><circle class="nm" cx="92" cy="148" r="6"/><circle class="nm" cx="200" cy="166" r="6"/>
+    <circle class="nm" cx="64" cy="196" r="6"/><circle class="nm" cx="128" cy="190" r="6"/><circle class="nm" cx="186" cy="218" r="6"/>
+    <circle class="nm" cx="246" cy="206" r="6"/><circle class="nm" cx="74" cy="246" r="6"/><circle class="nm" cx="138" cy="252" r="6"/>
+    <circle class="nm" cx="232" cy="250" r="6"/><circle class="nm" cx="105" cy="220" r="6"/><circle class="nm" cx="160" cy="150" r="6"/>
+    <circle class="m" cx="98" cy="92" r="6.5"/><circle class="m" cx="212" cy="104" r="6.5"/><circle class="m" cx="168" cy="84" r="6.5"/>
+    <circle class="m" cx="70" cy="160" r="6.5"/><circle class="m" cx="244" cy="172" r="6.5"/><circle class="m" cx="118" cy="234" r="6.5"/>
+    <circle class="m" cx="204" cy="250" r="6.5"/><circle class="m" cx="155" cy="206" r="6.5"/><circle class="m" cx="252" cy="248" r="6.5"/>
+    <g transform="translate(150,150) rotate(45)" filter="url(#ns)"><rect class="q" x="-7" y="-7" width="14" height="14" rx="3"/></g>
+    <text class="note" x="155" y="296" text-anchor="middle">matching points scattered around</text>
+    <text class="small" x="155" y="314" text-anchor="middle">two-hop can't link them &#8594; ACORN fails</text>
+  </g>
+</svg>

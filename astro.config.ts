@@ -24,7 +24,9 @@ export default defineConfig({
     shikiConfig: {
       theme: 'github-light',
       langs: [],
-      wrap: true
+      // false: long lines scroll horizontally instead of wrapping,
+      // so code (and aligned comments) keep their layout
+      wrap: false
     }
   },
   integrations: [UnoCSS({

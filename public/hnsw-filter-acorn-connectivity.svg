@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 792 348" font-family="-apple-system,'Helvetica Neue',Helvetica,Arial,sans-serif">
+  <defs>
+    <filter id="ns" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.1" flood-color="#2e405b" flood-opacity="0.18"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,1 L9,5 L0,9" fill="none" stroke="#c7254e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+  <style>
+    .edge{ stroke:#cbd2dd; stroke-width:2.2; fill:none; stroke-linecap:round }
+    .edge-gone{ stroke:#d9dee6; stroke-width:2; fill:none; stroke-linecap:round; stroke-dasharray:2 6; opacity:.7 }
+    .edge-br{ stroke:#e0a93f; stroke-width:2.6; fill:none; stroke-linecap:round }
+    .nm{ fill:#eef1f5; stroke:#aab3c2; stroke-width:2 }
+    .nm-gone{ fill:#f6f8fa; stroke:#c2c9d4; stroke-width:1.8; stroke-dasharray:3 3; opacity:.6 }
+    .m{ fill:#e4f3ee; stroke:#2f9e7b; stroke-width:2.3 }
+    .q{ fill:#c7254e; stroke:#9e1c3e; stroke-width:1.4 }
+    .island{ fill:#2f9e7b; fill-opacity:.05; stroke:#2f9e7b; stroke-width:1.6; stroke-dasharray:5 5 }
+    .title{ font-size:14.5px; font-weight:600; fill:#2e405b }
+    .lab{ font-size:12px; fill:#2e405b }
+    .small{ font-size:11px; fill:#6b7892 }
+    .note{ font-size:11.5px; fill:#c7254e; font-weight:600 }
+    .amb{ font-size:11.5px; fill:#c08a2a; font-weight:600 }
+  </style>
+
+  <rect x="1.5" y="1.5" width="789" height="345" rx="16" fill="#ffffff" stroke="#e7ebf1" stroke-width="1.5"/>
+  <line x1="266" y1="44" x2="266" y2="292" stroke="#eceff3" stroke-width="1.5"/>
+  <line x1="528" y1="44" x2="528" y2="292" stroke="#eceff3" stroke-width="1.5"/>
+
+  <!-- ===================== PANEL A ===================== -->
+  <g transform="translate(22,40)">
+    <text class="title" x="115" y="6" text-anchor="middle">1. Original HNSW graph</text>
+    <text class="small" x="115" y="22" text-anchor="middle">every node is connected</text>
+    <g transform="translate(0,28)">
+      <path class="edge" d="M28,118 L58,70"/><path class="edge" d="M28,118 L50,165"/>
+      <path class="edge" d="M58,70 L108,120"/><path class="edge" d="M50,165 L108,120"/><path class="edge" d="M58,70 L50,165"/>
+      <path class="edge" d="M200,70 L158,120"/><path class="edge" d="M196,165 L158,120"/><path class="edge" d="M200,70 L196,165"/>
+      <path class="edge" d="M108,120 L120,48"/><path class="edge" d="M120,48 L200,70"/>
+      <path class="edge" d="M108,120 L132,120"/><path class="edge" d="M132,120 L158,120"/>
+      <path class="edge" d="M50,165 L118,188"/><path class="edge" d="M118,188 L196,165"/>
+      <circle class="nm" cx="120" cy="48" r="11" filter="url(#ns)"/>
+      <circle class="nm" cx="132" cy="120" r="11" filter="url(#ns)"/>
+      <circle class="nm" cx="118" cy="188" r="11" filter="url(#ns)"/>
+      <circle class="m" cx="58" cy="70" r="11" filter="url(#ns)"/>
+      <circle class="m" cx="50" cy="165" r="11" filter="url(#ns)"/>
+      <circle class="m" cx="108" cy="120" r="11" filter="url(#ns)"/>
+      <circle class="m" cx="200" cy="70" r="11" filter="url(#ns)"/>
+      <circle class="m" cx="196" cy="165" r="11" filter="url(#ns)"/>
+      <circle class="m" cx="158" cy="120" r="11" filter="url(#ns)"/>
+      <g transform="translate(28,118) rotate(45)" filter="url(#ns)"><rect class="q" x="-8.5" y="-8.5" width="17" height="17" rx="4"/></g>
+      <text class="small" x="28" y="146" text-anchor="middle">query</text>
+    </g>
+  </g>
+
+  <!-- ===================== PANEL B ===================== -->
+  <g transform="translate(284,40)">
+    <text class="title" x="115" y="6" text-anchor="middle">2. Drop the filtered-out nodes</text>
+    <text class="small" x="115" y="22" text-anchor="middle">the graph splits into islands</text>
+    <g transform="translate(0,28)">
+      <ellipse class="island" cx="62" cy="118" rx="58" ry="74"/>
+      <ellipse class="island" cx="186" cy="118" rx="40" ry="74"/>
+      <path class="edge-gone" d="M108,120 L120,48"/><path class="edge-gone" d="M120,48 L200,70"/>
+      <path class="edge-gone" d="M108,120 L132,120"/><path class="edge-gone" d="M132,120 L158,120"/>
+      <path class="edge-gone" d="M50,165 L118,188"/><path class="edge-gone" d="M118,188 L196,165"/>
+      <path class="edge" d="M28,118 L58,70"/><path class="edge" d="M28,118 L50,165"/>
+      <path class="edge" d="M58,70 L108,120"/><path class="edge" d="M50,165 L108,120"/><path class="edge" d="M58,70 L50,165"/>
+      <path class="edge" d="M200,70 L158,120"/><path class="edge" d="M196,165 L158,120"/><path class="edge" d="M200,70 L196,165"/>
+      <circle class="nm-gone" cx="120" cy="48" r="10"/>
+      <circle class="nm-gone" cx="132" cy="120" r="10"/>
+      <circle class="nm-gone" cx="118" cy="188" r="10"/>
+      <circle class="m" cx="58" cy="70" r="11" filter="url(#ns)"/>
+      <circle class="m" cx="50" cy="165" r="11" filter="url(#ns)"/>
+      <circle class="m" cx="108" cy="120" r="11" filter="url(#ns)"/>
+      <circle class="m" cx="200" cy="70" r="11" filter="url(#ns)"/>
+      <circle class="m" cx="196" cy="165" r="11" filter="url(#ns)"/>
+      <circle class="m" cx="158" cy="120" r="11" filter="url(#ns)"/>
+      <g transform="translate(28,118) rotate(45)" filter="url(#ns)"><rect class="q" x="-8.5" y="-8.5" width="17" height="17" rx="4"/></g>
+      <text class="note" x="62" y="212" text-anchor="middle">query stuck here</text>
+      <text class="small" x="186" y="212" text-anchor="middle">unreachable</text>
+    </g>
+  </g>
+
+  <!-- ===================== PANEL C ===================== -->
+  <g transform="translate(546,40)">
+    <text class="title" x="115" y="6" text-anchor="middle">3. Neighbor Expansion</text>
+    <text class="small" x="115" y="22" text-anchor="middle">two hops bridge the gap</text>
+    <g transform="translate(0,28)">
+      <path class="edge" d="M28,118 L58,70"/><path class="edge" d="M28,118 L50,165"/>
+      <path class="edge" d="M58,70 L108,120"/><path class="edge" d="M50,165 L108,120"/><path class="edge" d="M58,70 L50,165"/>
+      <path class="edge" d="M200,70 L158,120"/><path class="edge" d="M196,165 L158,120"/><path class="edge" d="M200,70 L196,165"/>
+      <path class="edge-br" d="M108,120 L132,120"/><path class="edge-br" d="M132,120 L158,120"/>
+      <path d="M108,120 Q 133,166 158,120" fill="none" stroke="#c7254e" stroke-width="2.2" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+      <text class="note" x="133" y="180" text-anchor="middle">two-hop reach</text>
+      <circle cx="132" cy="120" r="16" fill="none" stroke="#e0a93f" stroke-width="1.6" stroke-dasharray="3 3"/>
+      <circle class="nm" cx="132" cy="120" r="11" filter="url(#ns)"/>
+      <text class="amb" x="132" y="98" text-anchor="middle">bridge</text>
+      <circle class="m" cx="58" cy="70" r="11" filter="url(#ns)"/>
+      <circle class="m" cx="50" cy="165" r="11" filter="url(#ns)"/>
+      <circle class="m" cx="108" cy="120" r="11" filter="url(#ns)"/>
+      <circle class="m" cx="200" cy="70" r="11" filter="url(#ns)"/>
+      <circle class="m" cx="196" cy="165" r="11" filter="url(#ns)"/>
+      <circle class="m" cx="158" cy="120" r="11" filter="url(#ns)"/>
+      <g transform="translate(28,118) rotate(45)" filter="url(#ns)"><rect class="q" x="-8.5" y="-8.5" width="17" height="17" rx="4"/></g>
+      <text class="small" x="82" y="139" text-anchor="middle">1st hop</text>
+      <text class="small" x="158" y="139" text-anchor="middle">2nd hop</text>
+    </g>
+  </g>
+
+  <!-- ===================== LEGEND ===================== -->
+  <g transform="translate(0,316)">
+    <g transform="translate(118,0)"><circle class="m" cx="0" cy="0" r="8"/><text class="lab" x="13" y="4">passes filter</text></g>
+    <g transform="translate(268,0)"><circle class="nm" cx="0" cy="0" r="8"/><text class="lab" x="13" y="4">filtered out</text></g>
+    <g transform="translate(408,0)"><g transform="rotate(45)"><rect class="q" x="-6.5" y="-6.5" width="13" height="13" rx="3"/></g><text class="lab" x="14" y="4">query</text></g>
+    <g transform="translate(512,0)"><circle cx="0" cy="0" r="8" fill="#eef1f5" stroke="#e0a93f" stroke-width="1.8" stroke-dasharray="2.5 2.5"/><text class="lab" x="14" y="4">bridge (two-hop)</text></g>
+  </g>
+</svg>

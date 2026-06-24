@@ -1,0 +1,135 @@
+---
+// 一个用于演示 filtered 向量搜索的交互示意图。
+// 纯原生 SVG + script，无第三方依赖。
+// 点分为两类(match / 不 match filter)，演示开关 filter 时 top-k 最近邻的变化。
+const W = 480;
+const H = 320;
+---
+
+<figure class="hf">
+  <div class="hf__bar">
+    <button id="hf-toggle" class="hf__btn" type="button">应用 Filter</button>
+    <span class="hf__hint" id="hf-hint">当前:不过滤,返回全局最近的 5 个点</span>
+  </div>
+
+  <svg id="hf-svg" viewBox={`0 0 ${W} ${H}`} role="img"
+       aria-label="filtered 向量搜索示意图" class="hf__svg"></svg>
+
+  <figcaption class="hf__legend">
+    <span><i class="dot match"></i> 满足 filter(如 category = A)</span>
+    <span><i class="dot miss"></i> 不满足 filter</span>
+    <span><i class="dot query"></i> 查询向量</span>
+    <span><i class="ring"></i> top-5 结果</span>
+  </figcaption>
+</figure>
+
+<script>
+  const W = 480, H = 320, K = 5
+  const query = { x: 240, y: 158 }
+
+  // 固定坐标的数据点,保证示意图构图稳定。match=是否满足 filter。
+  const pts = [
+    { x: 210, y: 140, match: false }, { x: 268, y: 132, match: true },
+    { x: 240, y: 190, match: false }, { x: 196, y: 178, match: true },
+    { x: 286, y: 184, match: false }, { x: 224, y: 108, match: false },
+    { x: 300, y: 150, match: true },  { x: 178, y: 132, match: false },
+    { x: 258, y: 216, match: true },  { x: 150, y: 200, match: true },
+    { x: 330, y: 110, match: false }, { x: 120, y: 150, match: true },
+    { x: 350, y: 200, match: true },  { x: 200, y: 250, match: false },
+    { x: 100, y: 100, match: true },  { x: 390, y: 150, match: false },
+    { x: 300, y: 250, match: true },  { x: 80,  y: 220, match: false },
+    { x: 420, y: 90,  match: true },  { x: 160, y: 70,  match: false },
+    { x: 360, y: 60,  match: true },  { x: 60,  y: 160, match: false },
+    { x: 410, y: 240, match: true },  { x: 140, y: 270, match: true },
+  ]
+
+  const svg = document.getElementById('hf-svg')!
+  const hint = document.getElementById('hf-hint')!
+  const btn = document.getElementById('hf-toggle')!
+  const NS = 'http://www.w3.org/2000/svg'
+  let filtered = false
+
+  const dist = (p: { x: number; y: number }) => Math.hypot(p.x - query.x, p.y - query.y)
+  const el = (name: string, attrs: Record<string, string | number>) => {
+    const e = document.createElementNS(NS, name)
+    for (const k in attrs) e.setAttribute(k, String(attrs[k]))
+    return e
+  }
+
+  function render() {
+    svg.replaceChildren()
+
+    // 候选集合:开 filter 时只保留 match 的点
+    const candidates = pts.filter(p => !filtered || p.match)
+    const topK = [...candidates].sort((a, b) => dist(a) - dist(b)).slice(0, K)
+
+    // 1) 先画 query 到 top-k 的连线
+    for (const p of topK) {
+      svg.appendChild(el('line', {
+        x1: query.x, y1: query.y, x2: p.x, y2: p.y,
+        stroke: '#f4a261', 'stroke-width': 1.5, 'stroke-dasharray': '4 3',
+      }))
+    }
+
+    // 2) 画所有数据点
+    for (const p of pts) {
+      const dimmed = filtered && !p.match
+      const c = el('circle', {
+        cx: p.x, cy: p.y, r: 6,
+        fill: p.match ? '#457b9d' : '#ffffff',
+        stroke: p.match ? '#1d3557' : '#bbbbbb',
+        'stroke-width': 1.5,
+        opacity: dimmed ? 0.25 : 1,
+        style: 'transition: opacity .25s',
+      })
+      svg.appendChild(c)
+      // top-k 高亮环
+      if (topK.includes(p)) {
+        svg.appendChild(el('circle', {
+          cx: p.x, cy: p.y, r: 11, fill: 'none',
+          stroke: '#e76f51', 'stroke-width': 2,
+        }))
+      }
+    }
+
+    // 3) 画 query 点(菱形)
+    const s = 8
+    svg.appendChild(el('path', {
+      d: `M ${query.x} ${query.y - s} L ${query.x + s} ${query.y} L ${query.x} ${query.y + s} L ${query.x - s} ${query.y} Z`,
+      fill: '#e63946', stroke: '#a4161a', 'stroke-width': 1.5,
+    }))
+  }
+
+  btn.addEventListener('click', () => {
+    filtered = !filtered
+    btn.textContent = filtered ? '取消 Filter' : '应用 Filter'
+    btn.classList.toggle('on', filtered)
+    hint.textContent = filtered
+      ? '已过滤:只在满足 filter 的点里找最近的 5 个 → 结果被「推远」了'
+      : '当前:不过滤,返回全局最近的 5 个点'
+    render()
+  })
+
+  render()
+</script>
+
+<style>
+  .hf { margin: 1.5rem 0; }
+  .hf__bar { display: flex; align-items: center; gap: .75rem; margin-bottom: .5rem; flex-wrap: wrap; }
+  .hf__btn {
+    border: 1px solid #1d3557; background: #fff; color: #1d3557;
+    padding: .3rem .8rem; border-radius: 6px; cursor: pointer; font-size: .85rem;
+    transition: background .2s, color .2s;
+  }
+  .hf__btn:hover { background: #f1f5f9; }
+  .hf__btn.on { background: #1d3557; color: #fff; }
+  .hf__hint { font-size: .8rem; color: #555; }
+  .hf__svg { width: 100%; height: auto; border: 1px solid #e5e7eb; border-radius: 8px; background: #fcfcfd; }
+  .hf__legend { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: .5rem; font-size: .78rem; color: #444; }
+  .hf__legend span { display: inline-flex; align-items: center; gap: .35rem; }
+  .hf .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+  .hf .dot.match { background: #457b9d; border: 1.5px solid #1d3557; }
+  .hf .dot.miss { background: #fff; border: 1.5px solid #bbb; }
+  .hf .dot.query { width: 11px; height: 11px; background: #e63946; transform: rotate(45deg); border-radius: 2px; }
+  .hf .ring { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #e76f51; display: inline-block; }
+</style>

@@ -1,5 +1,6 @@
 ---
 import Post from '~/components/Post.astro'
+import Toc from '~/components/Toc.astro'
 import LayoutDefault from '~/layouts/LayoutDefault.astro'
 import MusicPlayer from '~/components/MusicPlayer.astro'
 import { getAllPosts } from '~/utils'
@@ -21,24 +22,29 @@ export const getStaticPaths = (async ({}) => {
 type Props = InferGetStaticPropsType<typeof getStaticPaths>
 
 const { entry, prev, next } = Astro.props
-const { Content } = await entry.render()
+const { Content, headings } = await entry.render()
 const { translate: t } = Astro.locals
 const music = entry.data.music
 ---
 
 <LayoutDefault title={entry.data.title} desc={entry.data.description} banner={entry.data.banner}>
-  <Post post={entry}>
-    <Content />
-  </Post>
-  <Pagination
-    showLeft={Boolean(prev)}
-    leftTitle={`${t('prev_post')}: ${prev?.data.title}`}
-    leftUrl={`/posts/${prev?.slug}/`}
-    showRight={Boolean(next)}
-    rightTitle={`${t('next_post')}: ${next?.data.title}`}
-    rightUrl={`/posts/${next?.slug}/`}
-    showPageCount={false}
-  />
+  <div class="post-shell">
+    <Toc headings={headings} />
+    <div class="post-body">
+      <Post post={entry}>
+        <Content />
+      </Post>
+      <Pagination
+        showLeft={Boolean(prev)}
+        leftTitle={`${t('prev_post')}: ${prev?.data.title}`}
+        leftUrl={`/posts/${prev?.slug}/`}
+        showRight={Boolean(next)}
+        rightTitle={`${t('next_post')}: ${next?.data.title}`}
+        rightUrl={`/posts/${next?.slug}/`}
+        showPageCount={false}
+      />
+    </div>
+  </div>
 </LayoutDefault>
 
 <script>
@@ -73,6 +79,32 @@ const music = entry.data.music
 </script>
 
 <style is:global>
+  /* article + left-rail table of contents.
+     Below 1366px the TOC hides itself and the body keeps the full width. */
+  .post-body {
+    min-width: 0;
+  }
+  @media (min-width: 1366px) {
+    /* widen the post container so the reading column keeps its full width
+       (heti caps it at 42em) even with the TOC rail occupying the left side */
+    body .container {
+      max-width: 86rem;
+    }
+    .post-shell {
+      display: flex;
+      align-items: flex-start;
+      gap: 2.5rem;
+    }
+    .post-body {
+      flex: 1 1 auto;
+    }
+  }
+
+  /* land a little below the top when jumping to a section */
+  article.heti :is(h2, h3)[id] {
+    scroll-margin-top: 5rem;
+  }
+
   .code-container {
     position: relative;
   }

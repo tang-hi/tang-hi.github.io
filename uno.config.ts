@@ -34,7 +34,10 @@ export default defineConfig({
       background
     },
     fontFamily: {
-      sans: '"LXGW WenKai","Source Sans Pro","Roboto","Helvetica","Helvetica Neue","Source Han Sans SC","Source Han Sans TC","PingFang SC","PingFang HK","PingFang TC",sans-serif',
+      // Latin/digits render in Inter (a refined, even-weight webfont) instead of an
+      // uncontrolled heavy system fallback; Inter carries no Han glyphs, so Chinese
+      // falls through to LXGW WenKai — warm voice for prose, sharp technical tokens.
+      sans: '"Inter Variable",-apple-system,BlinkMacSystemFont,"Segoe UI","Roboto","Helvetica Neue","Helvetica","Arial","LXGW WenKai","Source Han Sans SC","Source Han Sans TC","PingFang SC","PingFang HK","PingFang TC",sans-serif',
       mono: '"Maple Mono NF CN","SFMono-Regular",consolas,"Liberation Mono",menlo,courier,monospace',
       serif: '"HiraMinProN-W6","Source Han Serif CN","Source Han Serif SC","Source Han Serif TC",serif',
     },

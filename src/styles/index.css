@@ -1,3 +1,21 @@
+/* self-hosted LXGW WenKai, subsetted to GB2312 ∪ site characters and served as
+   ONE atomic file per weight — replaces the ~448-chunk CDN whose partial loads
+   were dropping some glyphs to a fallback gothic (the 回 small / 解 big mixing). */
+@font-face {
+  font-family: "LXGW WenKai";
+  src: url("/fonts/lxgwwenkai-regular.woff2") format("woff2");
+  font-weight: 100 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "LXGW WenKai";
+  src: url("/fonts/lxgwwenkai-medium.woff2") format("woff2");
+  font-weight: 500 900; /* 600 strong / 700 headings use real medium glyphs, no faux bold */
+  font-style: normal;
+  font-display: swap;
+}
+
 body {
   --uno: antialiased;
   color: theme("colors.foreground");
@@ -82,12 +100,50 @@ article.heti pre {
   font-family: theme("fontFamily.mono");
 }
 
+/* inline code: just a colored monospace token, no filled box.
+   the pink background made dense paragraphs (lots of `C` / `W` / `e`) look spotty. */
 article.heti code {
-  padding: 2px 4px;
-  font-size: 90%;
+  font-size: 92%;
+  font-weight: 500;
   color: #c7254e;
-  background-color: #f9f2f4;
-  border-radius: 4px;
+}
+
+/* fenced code blocks (Shiki): lift them off the page with a clear border + soft shadow */
+article.heti pre.astro-code {
+  margin-block: 24px;
+  padding: 16px 20px;
+  background-color: #f6f8fa !important;
+  border: 1px solid #e4e8ee;
+  border-radius: 10px;
+  box-shadow: 0 2px 12px rgba(46, 64, 91, 0.06);
+  /* code reads at a smaller size than the 20px body so long lines
+     (incl. aligned trailing comments) fit on one line; never wrap */
+  font-size: 14.5px;
+  line-height: 1.6;
+  white-space: pre;
+  word-wrap: normal;
+  overflow-x: auto;
+}
+
+/* cancel heti's `.heti code { font-size: 90% }` inside code blocks
+   so block code keeps the size set above instead of compounding it */
+article.heti pre.astro-code code {
+  font-size: 1em;
+}
+
+/* standalone (markdown) images — e.g. pasted experiment charts:
+   frame them as a rounded card so they match the hand-drawn SVG figures.
+   figure > img (the SVG diagrams) already carry their own card, so they're left alone. */
+article.heti p > img {
+  display: block;
+  margin: 28px auto;
+  max-width: 100%;
+  height: auto;
+  padding: 10px;
+  background-color: #ffffff;
+  border: 1px solid #e7ebf1;
+  border-radius: 14px;
+  box-shadow: 0 2px 14px rgba(46, 64, 91, 0.07);
 }
 
 article.heti a code:hover {
@@ -96,4 +152,54 @@ article.heti a code:hover {
   /* border-bottom: solid transparent 2px; */
   color: #f9f2f4;
   background-color: #c7254e;
+}
+
+/* headings were sized for heti's 16px base, but the body is 20px — leaving h3 the
+   same size as body text and h4 smaller. Rescale so headings clearly outrank both
+   body text and bold (`strong`, weight 600): bigger AND heavier (700). */
+article.heti h2 {
+  margin-top: 2.4em;
+  padding-left: 14px;
+  border-left: 4px solid #2e405b;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+article.heti h3 {
+  margin-top: 1.9em;
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+article.heti h4 {
+  margin-top: 1.5em;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+/* figure captions read as captions, not body text: smaller + muted + centered
+   (heti already centers figures) */
+article.heti figcaption {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #6b7892;
+}
+
+/* standard-markdown caption: an *italic-only* paragraph immediately after an
+   image paragraph (the portable replacement for <figcaption>). Render it like a
+   real caption — muted, centered, small — instead of plain italic body text.
+   The `em:only-child` guard means body paragraphs after inline charts (which
+   carry no caption) are never matched. */
+article.heti p:has(> img) + p:has(> em:only-child) {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #6b7892;
+}
+article.heti p:has(> img) + p:has(> em:only-child) em {
+  font-style: normal;
 }

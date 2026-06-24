@@ -1,0 +1,167 @@
+---
+import type { MarkdownHeading } from 'astro'
+
+interface Props {
+  headings: MarkdownHeading[]
+}
+
+const { headings } = Astro.props
+// only h2 / h3 make a useful outline; the post title (h1) is excluded
+const items = headings.filter((h) => h.depth >= 2 && h.depth <= 3)
+---
+
+{
+  items.length >= 2 && (
+    <nav class="toc" data-toc aria-label="目录">
+      <p class="toc-title">目录</p>
+      <ul>
+        {items.map((h) => (
+          <li class={`depth-${h.depth}`}>
+            <a href={`#${h.slug}`} data-toc-link={h.slug}>
+              {h.text}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  )
+}
+
+<style>
+  .toc {
+    display: none;
+  }
+
+  @media (min-width: 1366px) {
+    .toc {
+      display: block;
+      position: sticky;
+      top: 6rem;
+      width: 200px;
+      flex: none;
+      max-height: calc(100vh - 9rem);
+      overflow-y: auto;
+      padding-left: 14px;
+      border-left: 1px solid #e7ebf1;
+      font-family: theme('fontFamily.sans');
+      scrollbar-width: thin;
+      scrollbar-color: #d3d9e2 transparent;
+    }
+  }
+
+  .toc::-webkit-scrollbar {
+    width: 5px;
+  }
+  .toc::-webkit-scrollbar-thumb {
+    background: #d3d9e2;
+    border-radius: 3px;
+  }
+
+  .toc-title {
+    margin: 0 0 10px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #97a1b4;
+  }
+
+  .toc ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .toc li {
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  .toc a {
+    display: block;
+    padding: 5px 0 5px 12px;
+    margin-left: -1px;
+    border-left: 2px solid transparent;
+    color: #6b7892;
+    font-size: 13.5px;
+    text-decoration: none;
+    transition: color 0.18s ease, border-color 0.18s ease;
+    overflow-wrap: break-word;
+  }
+
+  .toc li.depth-3 a {
+    padding-left: 26px;
+    font-size: 12.5px;
+  }
+
+  .toc a:hover {
+    color: #2e405b;
+    background: transparent;
+  }
+
+  .toc a.active {
+    color: #2e405b;
+    font-weight: 600;
+    border-left-color: #2e405b;
+  }
+</style>
+
+<script>
+  // Build the TOC behaviour once the post is in the DOM:
+  // 1. smooth-scroll to a section when its link is clicked
+  // 2. highlight the section currently under the top of the viewport (scrollspy)
+  const toc = document.querySelector<HTMLElement>('[data-toc]')
+  if (toc) {
+    const links = Array.from(toc.querySelectorAll<HTMLAnchorElement>('a[data-toc-link]'))
+    const linkById = new Map<string, HTMLAnchorElement>()
+    for (const a of links) {
+      const id = decodeURIComponent((a.getAttribute('href') || '').replace(/^#/, ''))
+      linkById.set(id, a)
+    }
+
+    const headings = Array.from(
+      document.querySelectorAll<HTMLElement>('article.heti h2[id], article.heti h3[id]'),
+    )
+
+    // smooth scroll + update the address bar without a jump
+    for (const a of links) {
+      a.addEventListener('click', (e) => {
+        const id = decodeURIComponent((a.getAttribute('href') || '').replace(/^#/, ''))
+        const target = document.getElementById(id)
+        if (!target) return
+        e.preventDefault()
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        history.replaceState(null, '', `#${id}`)
+      })
+    }
+
+    let active: HTMLAnchorElement | null = null
+    const setActive = (id: string) => {
+      const next = linkById.get(id) || null
+      if (next === active) return
+      active?.classList.remove('active')
+      next?.classList.add('active')
+      active = next
+    }
+
+    let ticking = false
+    const onScroll = () => {
+      if (ticking) return
+      ticking = true
+      requestAnimationFrame(() => {
+        ticking = false
+        if (!headings.length) return
+        // the last heading whose top has scrolled past the 130px line is "current"
+        let current = headings[0]
+        for (const h of headings) {
+          if (h.getBoundingClientRect().top <= 130) current = h
+          else break
+        }
+        setActive(current.id)
+      })
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+  }
+</script>

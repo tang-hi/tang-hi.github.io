@@ -39,8 +39,12 @@ const optimizedImage = new URL(image?.src??"/placeholder.png", Astro.url).toStri
         y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
     })(window, document, "clarity", "script", "lvhhjn5lfn");
   </script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@callmebill/lxgw-wenkai-web@latest/style.css" />
+    <!-- LXGW WenKai is now self-hosted as one atomic subset file per weight (see index.css @font-face);
+         preload the body weight so Chinese paints fast. -->
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/lxgwwenkai-regular.woff2" crossorigin />
     <link rel="stylesheet" href="https://fontsapi.zeoseven.com/442/main/result.css" />
+    <!-- refined Latin face: crisp, even weight for English/digits; CJK falls through to WenKai (latin-subsetted) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@5/index.css" />
     <link rel="sitemap" href="/sitemap-index.xml"/>
     <meta name="viewport" content="width=device-width" />
     <meta name="generator" content={Astro.generator} />
