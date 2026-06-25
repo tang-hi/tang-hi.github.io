@@ -19,7 +19,7 @@ notes.forEach((note: Post) => {
 const { translate: t } = Astro.locals
 ---
 
-<LayoutDefault>
+<LayoutDefault title={t('Notes')} desc="Short notes, reading snippets, and quick thoughts.">
   <div un-flex="~ col gap-4">
     <div class="mb-4">
       <h1 class="text-2xl font-bold mb-2">{t('Notes')}</h1>

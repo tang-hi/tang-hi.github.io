@@ -10,18 +10,20 @@ export async function getStaticPaths() {
   return Array.from(categories).map(([key, value]) => {
     const path = getPathFromCategory(key, THEME_CONFIG.category_map);
     return {
-      params: { category: path, name: key },
-      props: { posts: value },
+      params: { category: path },
+      props: { posts: value, name: key },
     }
   })
 }
 
-const { posts } = Astro.props
-const { category, name } = Astro.params
+// `name` is the human-readable category; it travels via props because Astro only
+// exposes real route params (`category`) on Astro.params — passing it as a param
+// silently dropped it, leaving the heading blank.
+const { posts, name } = Astro.props
 
 ---
 
-<LayoutDefault>
+<LayoutDefault title={name} desc={`Posts in the ${name} category.`}>
   <ListSection title={name}>
     {posts.map((post) => <ListItem title={post.data.title} href={`/posts/${post.slug}/`} description={formatDate(post.data.pubDate)} />)}
   </ListSection>

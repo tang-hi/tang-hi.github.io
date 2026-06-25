@@ -15,9 +15,10 @@ export const getStaticPaths = (async ({ paginate }) => {
 type Props = InferGetStaticPropsType<typeof getStaticPaths>
 
 const { page } = Astro.props
+const pageTitle = page.currentPage > 1 ? `${t('Posts')} · ${t('page_number', page.currentPage)}` : t('Posts')
 ---
 
-<LayoutDefault>
+<LayoutDefault title={pageTitle} desc="Posts on databases, search engines, vector search, C++, and systems internals.">
   <section contain-layout un-flex="~ col gap-7.5">
     {
       page.data.map((post) => (

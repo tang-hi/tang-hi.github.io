@@ -10,7 +10,7 @@ const { category_map } = Astro.locals.config;
 const categories = await getCategories()
 ---
 
-<LayoutDefault>
+<LayoutDefault title={t('Categories')} desc="Browse all posts by category.">
   <ListSection title={t('Categories')}>
     {Array.from(categories).map(([key, value]) => <ListItem title={key} href={`/categories/${getPathFromCategory(key, category_map)}`} description={t('categories_count', value.length)} />)}
   </ListSection>

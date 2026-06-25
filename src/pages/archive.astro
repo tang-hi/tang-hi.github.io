@@ -16,9 +16,11 @@ posts.forEach((post: Post) => {
   postByYear.get(year)!.push(post)
 })
 
+const { translate: t } = Astro.locals
 ---
 
-<LayoutDefault>
+<LayoutDefault title={t('Archive')} desc="All posts, archived by year.">
+
   <div un-flex="~ col gap-4">
     {
       Array.from(postByYear.entries()).map(([year, posts]) => (
