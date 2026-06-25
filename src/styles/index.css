@@ -95,6 +95,21 @@ article.heti {
   font-size: 20px;
 }
 
+/* English posts read as long-form prose: a warm, book-ish serif (Source Serif 4)
+   with slightly looser leading. Inter felt plain/corporate for English body text
+   next to the Chinese WenKai voice. Only the prose changes — headings fall back to
+   the sans below, and code keeps its mono rule (which targets code/pre directly). */
+article.heti.post-en {
+  font-family: "Source Serif 4 Variable", "Source Serif 4", Charter, "Iowan Old Style", Georgia, Cambria, "Times New Roman", serif;
+  font-optical-sizing: auto;
+  line-height: 1.7;
+  letter-spacing: 0;
+}
+
+article.heti.post-en :is(h1, h2, h3, h4, h5, h6) {
+  font-family: theme("fontFamily.sans");
+}
+
 article.heti code,
 article.heti pre {
   font-family: theme("fontFamily.mono");

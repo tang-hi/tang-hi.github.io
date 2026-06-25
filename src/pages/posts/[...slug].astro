@@ -3,35 +3,62 @@ import Post from '~/components/Post.astro'
 import Toc from '~/components/Toc.astro'
 import LayoutDefault from '~/layouts/LayoutDefault.astro'
 import MusicPlayer from '~/components/MusicPlayer.astro'
-import { getAllPosts } from '~/utils'
+import { getAllPosts, getLang, getTranslation } from '~/utils'
 import type { InferGetStaticPropsType, GetStaticPaths } from 'astro'
 import Pagination from '~/components/Pagination.astro'
 
 export const getStaticPaths = (async ({}) => {
   const posts = await getAllPosts()
-  return posts.map((post, idx) => {
-    const prev = posts[idx - 1]
-    const next = posts[idx + 1]
+  return posts.map((post) => {
+    // Prev/next navigation moves within the same language; the other-language
+    // variant is reached through the in-page toggle, not the prev/next chain.
+    const chain = posts.filter((p) => getLang(p) === getLang(post))
+    const idx = chain.findIndex((p) => p.slug === post.slug)
+    const prev = chain[idx - 1]
+    const next = chain[idx + 1]
+    const translation = getTranslation(post, posts)
     return {
       params: { slug: post.slug },
-      props: { entry: post, next, prev },
+      props: { entry: post, next, prev, translation },
     }
   })
 }) satisfies GetStaticPaths
 
 type Props = InferGetStaticPropsType<typeof getStaticPaths>
 
-const { entry, prev, next } = Astro.props
+const { entry, prev, next, translation } = Astro.props
 const { Content, headings } = await entry.render()
 const { translate: t } = Astro.locals
 const music = entry.data.music
+
+// SEO/GEO: html lang follows the post's content language; bilingual pairs cross-link via hreflang.
+const site = Astro.locals.config.website
+const htmlLang = getLang(entry) === 'en' ? 'en' : 'zh-CN'
+const postUrl = (p: Post) => new URL(`/posts/${p.slug}/`, site).toString()
+let alternates: { hreflang: string; href: string }[] | undefined
+if (translation) {
+  const zh = getLang(entry) === 'zh' ? entry : translation
+  const en = getLang(entry) === 'en' ? entry : translation
+  alternates = [
+    { hreflang: 'zh-CN', href: postUrl(zh) },
+    { hreflang: 'en', href: postUrl(en) },
+    { hreflang: 'x-default', href: postUrl(zh) },
+  ]
+}
 ---
 
-<LayoutDefault title={entry.data.title} desc={entry.data.description} banner={entry.data.banner}>
+<LayoutDefault
+  title={entry.data.title}
+  desc={entry.data.description}
+  banner={entry.data.banner}
+  lang={htmlLang}
+  article={{ pubDate: entry.data.pubDate, categories: entry.data.categories }}
+  alternates={alternates}
+>
   <div class="post-shell">
     <Toc headings={headings} />
     <div class="post-body">
-      <Post post={entry}>
+      <Post post={entry} translation={translation}>
         <Content />
       </Post>
       <Pagination

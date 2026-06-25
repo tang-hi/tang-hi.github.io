@@ -1,22 +1,42 @@
 ---
-import { formatDate } from '~/utils'
+import { formatDate, getLang } from '~/utils'
 
 interface Props {
   post: Post
+  translation?: Post
 }
 
-const { post } = Astro.props
+const { post, translation } = Astro.props
 const { translate: t } = Astro.locals
+
+// English posts read in a warm serif (see `article.heti.post-en` in index.css);
+// the serif webfont itself is loaded only on those pages, inside the .mdx body.
+const isEn = getLang(post) === 'en'
+
+// The toggle is labelled with the language it switches *to*.
+const otherLangLabel = translation
+  ? getLang(translation) === 'en' ? 'English' : '中文'
+  : null
 ---
 
-<article class="heti">
+<article class:list={['heti', { 'post-en': isEn }]}>
   <header>
-    <h1 class="post-title!">
-      <a href={`/posts/${post.slug}/`}>{post.data.title}</a>
-    </h1>
+    <div class="post-head">
+      <h1 class="post-title!">
+        <a href={`/posts/${post.slug}/`}>{post.data.title}</a>
+      </h1>
+      {
+        translation && (
+          <a class="lang-toggle" href={`/posts/${translation.slug}/`} title={`Read in ${otherLangLabel}`}>
+            <span class="i-mdi-translate" />
+            {otherLangLabel}
+          </a>
+        )
+      }
+    </div>
     <div class="mt-2 text-3.5">
       <span>{t('posted_at')}</span>
-      <time>{formatDate(post.data.pubDate)}</time>
+      <time datetime={post.data.pubDate.toISOString()}>{formatDate(post.data.pubDate)}</time>
       {
         post.data.categories &&
           post.data.categories.map((category) => (
@@ -54,3 +74,33 @@ const { translate: t } = Astro.locals
     )
   }
 </article>
+
+<style>
+  .post-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .lang-toggle {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 0.4rem;
+    padding: 0.15rem 0.6rem;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    white-space: nowrap;
+    border: 1px solid currentColor;
+    border-radius: 9999px;
+    opacity: 0.7;
+    transition: opacity 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+  }
+  .lang-toggle:hover {
+    opacity: 1;
+    /* matches the theme's foreground/background swap used for hover states */
+    background-color: #2e405b;
+    color: #ffffff;
+  }
+</style>

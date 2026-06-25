@@ -11,6 +11,16 @@ interface Props {
   title?: string
   desc?: string
   banner?: ImageMetadata
+  /** content language of this page; defaults to zh-CN (the site is predominantly Chinese) */
+  lang?: string
+  /** present only on blog-post pages — drives og:type=article and the BlogPosting JSON-LD */
+  article?: {
+    pubDate: Date
+    updatedDate?: Date
+    categories: string[]
+  }
+  /** bilingual hreflang alternates (each version lists every version, incl. itself + x-default) */
+  alternates?: { hreflang: string; href: string }[]
 }
 
 const props = Astro.props
@@ -19,7 +29,13 @@ const { header } = Astro.locals.config
 
 const title = props.title ?? themeConfig.title
 const desc = props.desc ?? themeConfig.desc
-const canonical = themeConfig.website
+const lang = props.lang ?? 'zh-CN'
+const { article, alternates } = props
+const ogLocale = lang === 'en' ? 'en_US' : 'zh_CN'
+
+const site = themeConfig.website
+// self-referential canonical/og url for THIS page (astro-seo also defaults canonical to Astro.url)
+const pageUrl = new URL(Astro.url.pathname, site).toString()
 
 const image =
   props.banner &&
@@ -27,10 +43,66 @@ const image =
     src: props.banner,
     format: "jpeg"
   }))
-const optimizedImage = new URL(image?.src??"/placeholder.png", Astro.url).toString()
+// posts with a banner use it; everything else falls back to the branded default card
+const optimizedImage = new URL(image?.src??"/og.png", Astro.url).toString()
+
+// "%s" keeps the page's own title; sub-pages get the site name appended for branding,
+// while the homepage (no own title) stays just "Don't Panic" rather than doubling up.
+const titleTemplate = props.title && props.title !== themeConfig.title
+  ? `%s · ${themeConfig.title}`
+  : '%s'
+
+// --- structured data (schema.org JSON-LD) — one @graph shared by every page ---
+const personId = `${site}/#person`
+const person = {
+  '@type': 'Person',
+  '@id': personId,
+  name: themeConfig.author,
+  url: site,
+  // sameAs links the author entity to its profiles (helps engines/LLMs disambiguate "who")
+  sameAs: themeConfig.socials.map((s) => s.href).filter((h) => h.startsWith('http')),
+}
+const websiteNode = {
+  '@type': 'WebSite',
+  '@id': `${site}/#website`,
+  url: site,
+  name: themeConfig.title,
+  description: themeConfig.desc,
+  inLanguage: lang,
+  publisher: { '@id': personId },
+}
+const graph: Record<string, unknown>[] = [person, websiteNode]
+if (article) {
+  graph.push({
+    '@type': 'BlogPosting',
+    '@id': `${pageUrl}#article`,
+    headline: title,
+    description: desc,
+    url: pageUrl,
+    mainEntityOfPage: pageUrl,
+    inLanguage: lang,
+    datePublished: article.pubDate.toISOString(),
+    dateModified: (article.updatedDate ?? article.pubDate).toISOString(),
+    author: { '@id': personId },
+    publisher: { '@id': personId },
+    image: optimizedImage,
+    ...(article.categories?.length
+      ? { articleSection: article.categories, keywords: article.categories.join(', ') }
+      : {}),
+  })
+  graph.push({
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: themeConfig.title, item: site },
+      { '@type': 'ListItem', position: 2, name: title, item: pageUrl },
+    ],
+  })
+}
+// escape `<` so a stray `</script>` in any string can't break out of the tag
+const jsonLd = JSON.stringify({ '@context': 'https://schema.org', '@graph': graph }).replace(/</g, '\\u003c')
 ---
 
-<html lang="en">
+<html lang={lang}>
   <head>
     <script type="text/javascript">
     (function(c,l,a,r,i,t,y){
@@ -51,6 +123,7 @@ const optimizedImage = new URL(image?.src??"/placeholder.png", Astro.url).toStri
     <SEO
       charset="utf-8"
       title={title}
+      titleTemplate={titleTemplate}
       description={desc}
       extend={{
         link: [{ rel: 'icon', href: '/favicon.jpg', type: 'image/jpeg' }],
@@ -67,12 +140,31 @@ const optimizedImage = new URL(image?.src??"/placeholder.png", Astro.url).toStri
       openGraph={{
         basic: {
           title: title,
-          type: "article",
+          type: article ? "article" : "website",
           image: optimizedImage,
-          url: canonical,
-        }
+          url: pageUrl,
+        },
+        optional: {
+          siteName: themeConfig.title,
+          description: desc,
+          locale: ogLocale,
+        },
+        ...(article ? {
+          article: {
+            publishedTime: article.pubDate.toISOString(),
+            modifiedTime: (article.updatedDate ?? article.pubDate).toISOString(),
+            authors: [themeConfig.author],
+            section: article.categories?.[0],
+            tags: article.categories,
+          },
+        } : {}),
       }}
     />
+
+    {alternates?.map((a) => (
+      <link rel="alternate" hreflang={a.hreflang} href={a.href} />
+    ))}
+    <script type="application/ld+json" is:inline set:html={jsonLd} />
 
     <script type="text/partytown" src="https://www.googletagmanager.com/gtag/js?id=G-27FYWKG4SY"></script>
     <script type="text/partytown">

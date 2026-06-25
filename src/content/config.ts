@@ -14,6 +14,10 @@ const posts = defineCollection({
       })
       .optional(),
     categories: z.array(z.string()),
+    /** language of this post; defaults to the primary language (zh) when omitted */
+    lang: z.enum(['zh', 'en']).optional(),
+    /** shared id linking the language variants of the same post together */
+    translationKey: z.string().optional(),
     author: z.string().optional(),
     commentsUrl: z.string().optional(),
     source: z.optional(z.object({ url: z.string(), title: z.string(), })),
